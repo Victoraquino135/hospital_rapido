@@ -1,0 +1,122 @@
+from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import bcrypt
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from sqlalchemy import select, delete
+from sqlalchemy.orm import Session
+from app.core.config import SECRET, ALGORITHM
+from app.core.database import get_db
+from app.models import User, RateLimit
+
+
+class PasswordHasher:
+    def hash(self, value):
+        return bcrypt.hashpw(value.encode(), bcrypt.gensalt()).decode()
+
+    def verify(self, value, encoded):
+        try:
+            return bcrypt.checkpw(value.encode(), encoded.encode())
+        except (ValueError, TypeError):
+            return False
+
+
+pwd = PasswordHasher()
+DUMMY_HASH = pwd.hash("Unrelated-Dummy@123")
+security = HTTPBearer()
+
+ROLE_PERMISSIONS = {
+    "paciente": ["appointments:own", "profile:own"],
+    "admin": [
+        "users:manage", "professionals:manage", "specialties:manage",
+        "schedules:manage", "appointments:read", "appointments:checkin",
+        "queue:read", "audit:read",
+    ],
+    "recepcao": ["appointments:read", "appointments:checkin", "queue:read"],
+    "profissional": ["appointments:assigned", "queue:read", "care:update"],
+}
+
+
+def canonical_role(role: str) -> str:
+    return "profissional" if role in {"medico", "enfermagem"} else role
+
+
+def permissions_for(user: User) -> list[str]:
+    permissions = list(ROLE_PERMISSIONS.get(canonical_role(user.perfil), []))
+    if user.perfil == "enfermagem" or bool(
+        getattr(user, "perfil_profissional", None)
+        and user.perfil_profissional.autorizado_triagem
+        and user.perfil_profissional.ativo
+    ):
+        permissions.append("triage:write")
+    return permissions
+
+
+def digest(value):
+    return hmac.new(SECRET.encode(), value.encode(), hashlib.sha256).hexdigest()
+
+
+def make_token(user):
+    return jwt.encode(
+        {
+            "sub": str(user.id),
+            "purpose": "access",
+            "version": user.token_version,
+            "role": canonical_role(user.perfil),
+            "exp": datetime.now(timezone.utc) + timedelta(hours=8),
+        },
+        SECRET,
+        algorithm=ALGORITHM,
+    )
+
+
+def current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    try:
+        data = jwt.decode(credentials.credentials, SECRET, algorithms=[ALGORITHM])
+        if data.get("purpose") != "access":
+            raise ValueError()
+        user = db.get(User, int(data["sub"]))
+        if not user or not user.ativo or data.get("version") != user.token_version:
+            raise ValueError()
+        return user
+    except (JWTError, KeyError, ValueError, TypeError):
+        raise HTTPException(401, "Sessão inválida ou expirada")
+
+
+def require_roles(*roles):
+    def checker(user=Depends(current_user)):
+        if user.perfil not in roles and canonical_role(user.perfil) not in roles:
+            raise HTTPException(403, "Seu perfil não possui autorização para esta ação")
+        return user
+
+    return checker
+
+
+def throttle(db, request: Request, action, identifier, limit=10):
+    """Contadores persistentes por IP e documento, sem armazenar identificadores brutos."""
+    now = datetime.utcnow()
+    db.execute(delete(RateLimit).where(RateLimit.expires_at <= now))
+    for scope, value, maximum in [
+        ("ip", request.client.host if request.client else "local", limit * 5),
+        ("document", identifier, limit),
+    ]:
+        key = digest(f"{action}:{scope}:{value}")
+        row = db.get(RateLimit, key)
+        if row and row.attempts >= maximum:
+            db.commit()
+            raise HTTPException(
+                429, "Muitas tentativas. Aguarde 15 minutos e tente novamente."
+            )
+        if row:
+            row.attempts += 1
+        else:
+            db.add(
+                RateLimit(key=key, attempts=1, expires_at=now + timedelta(minutes=15))
+            )
+    db.commit()
+    return row.attempts if row else 1

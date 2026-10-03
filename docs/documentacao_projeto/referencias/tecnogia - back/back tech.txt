@@ -1,0 +1,31 @@
+Back-end — Python + FastAPI
+
+O Back-end será desenvolvido utilizando Python com o framework FastAPI, responsável pela lógica, regras de negócio e comunicação entre o aplicativo e o banco de dados.
+
+O Back-end será responsável por:
+
+Autenticação e login;
+Controle de acesso e permissões;
+Cadastro dos usuários;
+Pacientes e responsáveis;
+Agendamento de consultas;
+Reagendamento e cancelamento;
+Controle da fila;
+Check-in;
+Triagem;
+Atendimento médico;
+Encaminhamentos;
+Notificações;
+Chatbot;
+Validação e processamento dos dados;
+Comunicação com o banco de dados.
+
+A comunicação entre Front-end e Back-end será realizada por meio de uma API REST, utilizando dados no formato JSON.
+
+Tecnologias:
+
+Linguagem: Python
+Framework: FastAPI
+Comunicação: API REST / JSON
+Autenticação: JWT
+Arquitetura: Front-end separado do Back-end

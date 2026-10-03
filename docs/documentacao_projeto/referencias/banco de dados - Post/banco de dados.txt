@@ -1,0 +1,46 @@
+Banco de Dados — PostgreSQL
+
+O sistema utilizará o PostgreSQL como banco de dados principal da UBS. Ele será responsável pelo armazenamento estruturado e seguro das informações do sistema.
+
+O banco deverá armazenar informações relacionadas a:
+
+Usuários e perfis;
+Pacientes;
+Responsáveis;
+Profissionais;
+Especialidades;
+Consultas;
+Agendamentos;
+Fila de atendimento;
+Triagem;
+Atendimentos;
+Encaminhamentos;
+Notificações;
+UBS;
+Salas;
+Histórico de operações.
+
+O acesso ao banco será realizado exclusivamente pelo Back-end, evitando que o aplicativo tenha acesso direto ao banco de dados.
+
+Arquitetura
+📱💻 FRONT-END
+Flutter + Dart
+       │
+       │ API REST / JSON
+       ▼
+🐍 BACK-END
+Python + FastAPI
+       │
+       │
+       ▼
+🗄️ BANCO DE DADOS
+PostgreSQL
+Resumo da decisão
+
+Front-end: Flutter + Dart
+Back-end: Python + FastAPI
+Banco de dados: PostgreSQL
+Comunicação: API REST + JSON
+Arquitetura: Front-end → API → Banco de Dados
+
+Essa definição já pode entrar como a seção oficial "Linguagens, Tecnologias e Banco de Dados" do projeto da UBS.

@@ -1,0 +1,24 @@
+🎨 Front-end — Flutter + Dart
+
+O Front-end será desenvolvido utilizando o Flutter, framework que permite criar aplicações para celular e desktop utilizando uma única base de código. A linguagem utilizada será Dart.
+
+O Front-end será responsável pela interface visual e interação com os usuários da UBS, incluindo:
+
+Telas de login e cadastro;
+Dashboards de cada perfil;
+Agendamento e gerenciamento de consultas;
+Acompanhamento da fila;
+Triagem e atendimento;
+Notificações;
+Chatbot;
+Menus e navegação;
+Responsividade para celular e desktop;
+Acessibilidade;
+Identidade visual da UBS.
+
+Tecnologias:
+
+Framework: Flutter
+Linguagem: Dart
+Plataformas: Android e Desktop/Windows
+Interface: Responsiva e acessível

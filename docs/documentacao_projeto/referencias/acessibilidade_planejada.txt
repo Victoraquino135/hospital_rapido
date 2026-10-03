@@ -1,0 +1,11 @@
+Texto Grande e Alto Contraste: Suporte ao aumento de fonte do celular e cores com forte contraste para facilitar a leitura de idosos e pessoas com baixa visão.
+
+Áreas de Toque Grandes (mínimo 48px): Botões e campos amplos para evitar cliques errados por quem tem tremores ou dificuldade motora.
+
+Navegação por Teclado e Foco (Tab): Permite percorrer todos os elementos interativos em ordem lógica usando a tecla Tab, exibindo um indicador visual de foco bem visível no elemento selecionado.
+
+Leitor de Tela e LIBRAS: Compatibilidade com leitores de voz (TalkBack/VoiceOver) e integração com tradutor de sinais (ex: VLibras) para deficientes visuais e auditivos.
+
+Linguagem Simples com Ícones: Termos diretos acompanhados de símbolos visuais para ajudar pessoas de baixo letramento ou analfabetos funcionais.
+
+Feedback Visual e Sonoro: Alertas claros (som, vibração e aviso na tela) para confirmar ações como agendamentos e lembretes de consultas.

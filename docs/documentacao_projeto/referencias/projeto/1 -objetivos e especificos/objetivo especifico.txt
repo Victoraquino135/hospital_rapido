@@ -1,0 +1,20 @@
+🎯 Ideia central
+
+“Organizar o atendimento da UBS do início ao fim.”
+
+O fluxo principal que tínhamos pensado era:
+
+Cadastro → Agendamento → Chegada → Check-in → Fila → Triagem → Atendimento → Encaminhamento → Finalização
+
+Principais objetivos do sistema
+Facilitar o cadastro dos pacientes.
+Permitir agendamento, cancelamento e reagendamento de consultas.
+Organizar e acompanhar a fila de atendimento.
+Registrar informações da triagem.
+Facilitar o trabalho dos profissionais da UBS.
+Melhorar a comunicação entre os setores.
+Controlar acessos e permissões de cada perfil.
+Reduzir processos manuais e duplicidade de informações.
+Facilitar o acesso do paciente às suas informações.
+Promover acessibilidade.
+Auxiliar na organização e gestão da UBS.

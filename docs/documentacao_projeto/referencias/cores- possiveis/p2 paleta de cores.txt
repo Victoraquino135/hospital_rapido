@@ -1,0 +1,14 @@
+Paleta 2: Humanizada e Moderna (Prevenção e Bem-estar)
+Opção acolhedora com tons orgânicos, reduzindo o tom frio hospitalar.
+
+Cor Primária / Botão: #0F766E (Verde Petróleo / Teal)
+
+Cor Secundária / Detalhes: #2DD4BF (Verde Menta)
+
+Fundo da Tela: #F0FDF4 (Menta Claro)
+
+Campos de Entrada (Inputs): #FFFFFF
+
+Alertas e Lembretes: #F59E0B (Âmbar / Laranja)
+
+Texto Principal: #0F172A (Azul Escuro / Quase Preto)

@@ -1,0 +1,5 @@
+Títulos: Roboto Bold 700
+Subtítulos: Roboto Medium 500
+Texto: Roboto Regular 400
+Botões: Roboto Medium 500
+Informações pequenas: Roboto Regular 40

@@ -1,0 +1,61 @@
+Aqui estão os prompts e mensagens das nossas conversas de ontem e de hoje focados no desenvolvimento do projeto UBS Rápida:
+
+1. Prompt de Padronização Visuais e Estrutura das Telas (Enviado em 13/09/2026)
+
+"Preciso padronizar a identidade visual e o componente de acessibilidade em todas as telas de entrada do sistema 'UBS Rápida' (Login, Cadastro e Recuperação de Senha).
+
+LOGO DO SISTEMA: Remova qualquer caixa ou moldura cinza/branca de fundo ao redor da logo da UBS Rápida. A logo deve ser exibida com fundo 100% transparente em todas as telas.
+
+BOTÃO E MENU DE ACESSIBILIDADE: O botão 'Preferências de Acessibilidade' deve ser padronizado e posicionado de forma fixa no canto SUPERIOR DIREITO em formato pill azul (arredondado). Ele deve acionar o card/dropdown suspenso com as opções de ajuste de fonte (A-, A, A+), alto contraste e suporte a leitores de tela.
+
+TELA DE LOGIN: Adicione abaixo do campo de senha o Checkbox 'Lembrar do meu usuário' para salvamento seguro de dados de acesso."
+
+2. Prompt de Criação do Dashboard do Paciente (Enviado em 13/09/2026)
+
+"Desenvolva a Tela Principal (Dashboard) para o perfil Paciente do sistema UBS Rápida.
+
+Estrutura da tela:
+
+CABEÇALHO: Logo UBS Rápida à esquerda, saudação 'Olá, Victor' e o Botão de Acessibilidade no canto superior direito.
+
+CARD EM DESTAQUE - MINHA PRÓXIMA CONSULTA (RF09): Mostrar especialidade, médico, data, hora e UBS. Adicionar linha do tempo de progresso: [1. Agendada] ➔ [2. Em Triagem] ➔ [3. Em Atendimento] ➔ [4. Concluída].
+
+GRID DE AÇÕES RÁPIDAS:
+
+Agendar Consulta (RF02)
+
+Minhas Consultas
+
+Vacinação & Imunização (RF10)
+
+Retirar Medicamentos (RF07)"
+
+3. Prompt de Ajuste do Menu de Acessibilidade Compacto (Enviado hoje, 14/09/2026)
+
+"PROMPT DE CORREÇÃO - MENU DE ACESSIBILIDADE COMPACTO
+
+Por favor, remova o menu grande/expandido que ocupa a tela inteira (remova os blocos de Dislexia, Guia de Teclado e VLibras).
+
+Mantenha APENAS o card flutuante/dropdown compacto suspenso no canto superior direito (alinhado logo abaixo do botão 'Preferências de Acessibilidade'), contendo exclusivamente:
+
+Título: 'Opções de acessibilidade'
+
+Seção 1 - Tamanho da fonte: 3 botões ovais lado a lado [ A- ] [ A ] [ A+ ]
+
+Seção 2 - Alto contraste: Subtexto 'Aumenta o contraste visual' + Toggle Switch
+
+Seção 3 - Suporte a leitores de tela: Subtexto 'Mantém descrições acessíveis nos controles' + Toggle Switch
+
+Rodapé: Texto discreto 'Use TAB para navegar e ENTER para confirmar.'
+
+Aplique esse mesmo menu compacto nas telas de Login, Cadastro, Recuperação de Senha e Dashboard."
+
+4. Prompt de Correção do Fundo e Funcionamento do Alto Contraste no Login (Enviado hoje, 14/09/2026)
+
+"PROMPT DE REFATORAÇÃO VISUAL E CORREÇÃO DE ACESSIBILIDADE
+
+FUNDO DA TELA: Remova a ilustração com ondas coloridas (verde e azul) do fundo da página. Deixe o fundo geral da aplicação totalmente limpo, sólido e branco (#FFFFFF ou #F8FAFC).
+
+NAVEGAÇÃO DOS BOTÕES: Adicione a prevenção do recarregamento da página (event.preventDefault()) nos formulários de Login e Cadastro. Ao clicar em 'Entrar' ou 'Cadastrar', a página deve navegar diretamente para a Tela Principal (Dashboard do Paciente).
+
+ALTO CONTRASTE NA TELA DE LOGIN: Garanta que ao ativar o toggle de 'Alto Contraste', a classe .high-contrast seja adicionada ao <body> ou ao container principal em TODAS as páginas, incluindo a tela de Login, alterando o fundo para escuro (#000000) e textos/bordas para alto contraste (#FFFF00 / #FFFFFF)."

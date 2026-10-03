@@ -1,0 +1,10 @@
+Elemento,Espaçamento / Tamanho,Unidade Tailwind,Função
+Margem Lateral da Tela,24px,px-6,Distância entre o conteúdo e as bordas da tela
+Topo / Margem Superior,48px a 64px,pt-12 a pt-16,Espaço antes do logo no topo
+Abaixo do Logo,32px,mb-8,"Distância entre a logo e o título ""LOGIN"""
+Abaixo do Título,24px,mb-6,Distância entre o título e o primeiro campo
+Entre os Campos (Inputs),16px,space-y-4,Distância vertical entre o campo Usuário e Senha
+Entre Campo e Botão,24px a 32px,mt-6 a mt-8,Espaço para não clicar no botão por engano
+Padding Interno do Botão,16px (vert) / 24px (horiz),py-4 px-6,Garante uma área de toque confortável (mínimo 48px de altura)
+Padding Interno dos Inputs,12px ou 16px (vert),py-3 ou py-4,Espaço interno para o texto digitado não colar na borda
+Abaixo do Botão (Links),16px,mt-4,"Distância para o link ""Esqueci a senha"" ou ""Ajuda"""

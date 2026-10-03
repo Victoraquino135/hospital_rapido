@@ -1,0 +1,210 @@
+from datetime import datetime, timedelta
+
+from sqlalchemy import func, select
+
+from test_integration import client, register, login
+from app.core.database import SessionLocal
+from app.core.security import pwd
+from app.models import Appointment, PasswordRecovery, ProfessionalSchedule, User
+
+
+def _email_recovery(client, monkeypatch):
+    import app.routes.recovery as recovery_routes
+
+    sent = []
+    monkeypatch.setattr(
+        recovery_routes,
+        "send_recovery",
+        lambda email, code: sent.append((email, code)) if email else None,
+    )
+    assert register(client).status_code == 201
+    response = client.post(
+        "/auth/esqueci-senha", json={"email": "MARIA@example.com"}
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == (
+        "Se o e-mail estiver cadastrado, enviaremos um código de verificação."
+    )
+    assert sent and sent[0][0] == "maria@example.com"
+    with SessionLocal() as db:
+        recovery = db.scalar(select(PasswordRecovery))
+        assert recovery.codigo_hash != sent[0][1]
+        assert len(recovery.codigo_hash) == 64
+        assert recovery.expira_em <= datetime.utcnow() + timedelta(minutes=10)
+    return sent[0][1]
+
+
+def test_email_recovery_correct_single_use_and_new_login(client, monkeypatch):
+    code = _email_recovery(client, monkeypatch)
+    verified = client.post(
+        "/auth/validar-codigo-recuperacao",
+        json={"email": "maria@example.com", "code": code},
+    )
+    assert verified.status_code == 200
+    body = {
+        "recovery_token": verified.json()["recovery_token"],
+        "new_password": "NovaSenha@123",
+        "confirm_new_password": "NovaSenha@123",
+    }
+    changed = client.post("/auth/redefinir-senha", json=body)
+    assert changed.status_code == 200
+    assert changed.json()["message"] == (
+        "Senha alterada com sucesso. Faça login com sua nova senha."
+    )
+    assert client.post("/auth/redefinir-senha", json=body).status_code == 401
+    assert login(client).status_code == 401
+    assert login(client, password="NovaSenha@123").status_code == 200
+
+
+def test_email_recovery_invalid_expired_weak_and_confirmation(client, monkeypatch):
+    code = _email_recovery(client, monkeypatch)
+    wrong = "000000" if code != "000000" else "111111"
+    assert client.post(
+        "/auth/validar-codigo-recuperacao",
+        json={"email": "maria@example.com", "code": wrong},
+    ).status_code == 400
+    with SessionLocal() as db:
+        row = db.scalar(select(PasswordRecovery))
+        row.expira_em = datetime.utcnow() - timedelta(seconds=1)
+        db.commit()
+    assert client.post(
+        "/auth/validar-codigo-recuperacao",
+        json={"email": "maria@example.com", "code": code},
+    ).status_code == 400
+
+    with SessionLocal() as db:
+        row = db.scalar(select(PasswordRecovery))
+        row.expira_em = datetime.utcnow() + timedelta(minutes=10)
+        row.tentativas = 0
+        db.commit()
+    token = client.post(
+        "/auth/validar-codigo-recuperacao",
+        json={"email": "maria@example.com", "code": code},
+    ).json()["recovery_token"]
+    assert client.post("/auth/redefinir-senha", json={
+        "recovery_token": token,
+        "new_password": "fraca123",
+        "confirm_new_password": "fraca123",
+    }).status_code == 422
+    assert client.post("/auth/redefinir-senha", json={
+        "recovery_token": token,
+        "new_password": "NovaSenha@123",
+        "confirm_new_password": "OutraSenha@123",
+    }).status_code == 422
+
+
+def test_unknown_email_has_same_response_and_no_recovery(client, monkeypatch):
+    import app.routes.recovery as recovery_routes
+
+    monkeypatch.setattr(recovery_routes, "send_recovery", lambda email, code: None)
+    assert register(client).status_code == 201
+    known = client.post("/auth/esqueci-senha", json={"email": "maria@example.com"})
+    unknown = client.post("/auth/esqueci-senha", json={"email": "ninguem@example.com"})
+    assert known.status_code == unknown.status_code == 200
+    assert known.json() == unknown.json()
+
+
+def _next_weekday():
+    day = (datetime.now() + timedelta(days=2)).replace(
+        hour=7, minute=0, second=0, microsecond=0
+    )
+    while day.weekday() >= 5:
+        day += timedelta(days=1)
+    return day
+
+
+def test_calendar_states_and_invalid_periods(client):
+    assert register(client).status_code == 201
+    assert register(client, cpf="12345678909", email="outro@example.com").status_code == 201
+    first_token = login(client).json()["access_token"]
+    with SessionLocal() as db:
+        patients = list(db.scalars(select(User).where(User.perfil == "paciente").order_by(User.id)))
+        doctor = User(
+            nome="Dra. Clínica Geral",
+            cpf="11144477735",
+            email="clinica@example.com",
+            senha_hash=pwd.hash("Medico@123"),
+            perfil="medico",
+        )
+        db.add(doctor)
+        db.flush()
+        base = _next_weekday()
+        slots = [base.replace(hour=hour) for hour in (7, 8, 9, 10, 17)]
+        for at in slots:
+            db.add(ProfessionalSchedule(
+                medico_id=doctor.id,
+                especialidade="Clínica Geral",
+                data_horario=at,
+                bloqueado=at.hour == 10,
+            ))
+        db.add_all([
+            Appointment(
+                paciente_id=patients[1].id,
+                medico_id=doctor.id,
+                especialidade="Clínica Geral",
+                data_horario=slots[1],
+                status="agendado",
+            ),
+            Appointment(
+                paciente_id=patients[0].id,
+                medico_id=doctor.id,
+                especialidade="Clínica Geral",
+                data_horario=slots[2],
+                status="agendado",
+            ),
+        ])
+        db.commit()
+        doctor_id = doctor.id
+    headers = {"Authorization": f"Bearer {first_token}"}
+    day = base.date().isoformat()
+    response = client.get(
+        f"/availability/calendar-times?specialty=Cl%C3%ADnica%20Geral&doctor_id={doctor_id}&day={day}",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    states = {item["scheduled_at"][11:13]: item["label"] for item in response.json()}
+    assert states == {
+        "07": "Disponível",
+        "08": "Indisponível",
+        "09": "Já agendado",
+        "10": "Indisponível",
+        "17": "Disponível",
+    }
+    assert all("patient" not in item for item in response.json())
+    weekend = base
+    while weekend.weekday() < 5:
+        weekend += timedelta(days=1)
+    assert client.get(
+        f"/availability/calendar-times?specialty=Cl%C3%ADnica%20Geral&doctor_id={doctor_id}&day={weekend.date().isoformat()}",
+        headers=headers,
+    ).json() == []
+    past = (datetime.now() - timedelta(days=1)).date().isoformat()
+    assert client.get(
+        f"/availability/calendar-times?specialty=Cl%C3%ADnica%20Geral&doctor_id={doctor_id}&day={past}",
+        headers=headers,
+    ).json() == []
+
+
+def test_initial_schedule_has_fourteen_weekdays_including_17h(client):
+    from app.main import ensure_future_general_schedule
+
+    with SessionLocal() as db:
+        doctor = User(
+            nome="Dra. Agenda Futura",
+            cpf="11144477735",
+            email="agenda@example.com",
+            senha_hash=pwd.hash("Medico@123"),
+            perfil="medico",
+        )
+        db.add(doctor)
+        db.commit()
+        assert ensure_future_general_schedule(db) == 140
+        assert ensure_future_general_schedule(db) == 0
+        rows = list(db.scalars(select(ProfessionalSchedule).where(
+            ProfessionalSchedule.medico_id == doctor.id)))
+        assert len(rows) == 140
+        assert len({row.data_horario.date() for row in rows}) == 14
+        assert {row.data_horario.hour for row in rows} == {
+            7, 8, 9, 10, 11, 13, 14, 15, 16, 17
+        }
+        assert all(row.data_horario.weekday() < 5 for row in rows)

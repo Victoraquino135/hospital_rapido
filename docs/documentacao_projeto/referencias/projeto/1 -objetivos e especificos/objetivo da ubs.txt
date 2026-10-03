@@ -1,0 +1,1 @@
+Desenvolver um sistema para uma Unidade Básica de Saúde (UBS) que permita organizar e gerenciar o atendimento dos pacientes, desde o cadastro e agendamento até a recepção, triagem, atendimento profissional e acompanhamento do fluxo de atendimento, buscando reduzir filas, melhorar a organização dos serviços e facilitar o acesso às informações.
