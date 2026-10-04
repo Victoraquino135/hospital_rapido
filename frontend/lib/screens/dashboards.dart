@@ -846,13 +846,13 @@ class StatusTimeline extends StatelessWidget {
   }
 }
 
-class StaffDashboard extends StatefulWidget {
-  const StaffDashboard({super.key});
+class LegacyStaffDashboard extends StatefulWidget {
+  const LegacyStaffDashboard({super.key});
   @override
-  State<StaffDashboard> createState() => _StaffDashboardState();
+  State<LegacyStaffDashboard> createState() => _LegacyStaffDashboardState();
 }
 
-class _StaffDashboardState extends State<StaffDashboard> {
+class _LegacyStaffDashboardState extends State<LegacyStaffDashboard> {
   List<Map<String, dynamic>> queue = [];
   List<AdminAppointment> agenda = [];
   bool loading = true, requesting = false;

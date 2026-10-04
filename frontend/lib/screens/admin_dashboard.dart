@@ -960,6 +960,8 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
                       DropdownMenuItem(
                           value: 'recepcao', child: Text('Recepção')),
                       DropdownMenuItem(
+                          value: 'enfermagem', child: Text('Enfermagem')),
+                      DropdownMenuItem(
                           value: 'profissional', child: Text('Profissional'))
                     ],
                     onChanged: (v) {
@@ -990,12 +992,12 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
           Card(
               child: ListTile(
                   leading: CircleAvatar(
-                      child: Icon(user.role == 'profissional'
+                      child: Icon(user.role == 'profissional' || user.role == 'enfermagem'
                           ? Icons.medical_services
                           : Icons.support_agent)),
                   title: Text(user.name),
                   subtitle: Text(
-                      '${user.role == 'profissional' ? 'Profissional' : user.role == 'admin' ? 'Administrador' : 'Recepção'} • ${user.maskedCpf}\n${user.email}${user.specialty == null ? '' : ' • ${user.specialty}'}'),
+                      '${user.role == 'profissional' ? 'Profissional' : user.role == 'enfermagem' ? 'Enfermagem' : user.role == 'admin' ? 'Administrador' : 'Recepção'} • ${user.maskedCpf}\n${user.email}${user.specialty == null ? '' : ' • ${user.specialty}'}'),
                   isThreeLine: true,
                   trailing: Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -1144,10 +1146,10 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
       'name': name.text.trim(),
       'email': email.text.trim(),
       'role': role,
-      if (role == 'profissional')
+      if (role == 'profissional' || role == 'enfermagem')
         'professional_registration': registration.text.trim(),
-      if (role == 'profissional') 'specialty_id': specialtyId,
-      if (role == 'profissional') 'can_triage': canTriage
+      if (role == 'profissional' || role == 'enfermagem') 'specialty_id': specialtyId,
+      if (role == 'enfermagem') 'can_triage': true
     };
     if (widget.existing == null) {
       data.addAll({
@@ -1207,8 +1209,10 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                           DropdownMenuItem(
                               value: 'recepcao', child: Text('Recepção')),
                           DropdownMenuItem(
+                              value: 'enfermagem', child: Text('Enfermagem')),
+                          DropdownMenuItem(
                               value: 'profissional',
-                              child: Text('Profissional'))
+                              child: Text('Profissional de saúde'))
                         ],
                         onChanged: (v) => setState(() {
                               role = v!;
@@ -1218,7 +1222,7 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                               }
                             })),
                     const SizedBox(height: 16),
-                    if (role == 'profissional') ...[
+                    if (role == 'profissional' || role == 'enfermagem') ...[
                       field(registration, 'Registro profissional',
                           Icons.workspace_premium_outlined,
                           errorText: errors['professional_registration']),
@@ -1236,10 +1240,11 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                                   child: Text(item['name'].toString()))
                           ],
                           onChanged: (v) => setState(() => specialtyId = v)),
-                      SwitchListTile(
-                          value: canTriage,
-                          onChanged: (v) => setState(() => canTriage = v),
-                          title: const Text('Autorizado a realizar triagem')),
+                      if (role == 'enfermagem')
+                        const ListTile(
+                            leading: Icon(Icons.verified_user_outlined),
+                            title: Text('Autorizado a realizar triagem'),
+                            subtitle: Text('Permissão exclusiva do perfil Enfermagem.')),
                     ],
                     if (widget.existing == null) ...[
                       field(password, 'Senha provisória', Icons.lock_outline,

@@ -1,8 +1,15 @@
 # Segredos e configuração local
 .env
 **/.env
+*.env.local
+*.env.production
+*.env.development
+!.env.example
+**/secrets/
 *.pem
 *.key
+*.pfx
+*.p12
 
 # Bancos locais e cópias de segurança
 *.db
@@ -11,6 +18,9 @@
 *.sqlite3
 *.bak
 *.backup
+*.db-journal
+*.db-shm
+*.db-wal
 
 # Python
 **/__pycache__/

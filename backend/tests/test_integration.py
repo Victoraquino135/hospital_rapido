@@ -816,13 +816,21 @@ def test_admin_manages_internal_users_and_permissions(client):
         "can_triage": True}
     created_professional = client.post("/admin/users", headers=headers, json=professional)
     assert created_professional.status_code == 201
-    assert created_professional.json()["can_triage"] is True
+    assert created_professional.json()["can_triage"] is False
+    nursing = {"name": "Helena Enfermagem", "cpf": "70000000744",
+        "email": "helena@example.com", "role": "enfermagem", "password": "Equipe@123",
+        "password_confirmation": "Equipe@123", "active": True,
+        "professional_registration": "COREN-FICT-456", "specialty_id": specialty_id}
+    created_nursing = client.post("/admin/users", headers=headers, json=nursing)
+    assert created_nursing.status_code == 201
+    assert created_nursing.json()["role"] == "enfermagem"
+    assert created_nursing.json()["can_triage"] is True
     assert client.post("/admin/users", headers=headers,
         json={**reception, "email": "outra@example.com"}).status_code == 409
     with SessionLocal() as db:
         users = list(db.scalars(select(User).where(User.perfil.in_(["recepcao", "profissional"]))))
         assert all(u.senha_hash.startswith("$2b$") for u in users)
-        assert db.scalar(select(func.count(AuditLog.id))) == 2
+        assert db.scalar(select(func.count(AuditLog.id))) == 3
         reception_user = db.scalar(select(User).where(User.perfil == "recepcao"))
         professional_user = db.scalar(select(User).where(User.perfil == "profissional"))
         reception_headers = {"Authorization": "Bearer " + make_token(reception_user)}
@@ -951,9 +959,9 @@ def test_absence_details_specialties_and_schedule_rules(client):
     assert client.get(f"/admin/appointments/{manual_id}", headers=header(client)).status_code == 403
 
     assert client.post("/admin/specialties", headers=headers,
-                       json={"name": "Dermatologia Fictícia"}).status_code == 422
+                       json={"name": "Dermatologia Fictícia"}).status_code == 201
     listed = client.get("/admin/specialties", headers=headers).json()
-    assert [item["name"] for item in listed] == ["Clínica geral"]
+    assert [item["name"] for item in listed] == ["Clínica geral", "Dermatologia Fictícia"]
 
     next_day = (datetime.now() + timedelta(days=1)).date()
     while next_day.weekday() >= 5:

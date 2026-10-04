@@ -1,20 +1,23 @@
-param(
+﻿param(
     [ValidateSet('windows', 'chrome', 'edge')]
     [string]$Dispositivo = 'windows',
+    [switch]$AtualizarTudo,
     [switch]$Validar,
     [switch]$SemPausa
 )
 
 $ErrorActionPreference = 'Stop'
+$env:PYTHONUTF8 = '1'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$OutputEncoding = [Console]::OutputEncoding
 $pastaProjeto = $PSScriptRoot
 $pastaBackend = Join-Path $pastaProjeto 'backend'
 $pastaFrontend = Join-Path $pastaProjeto 'frontend'
 $arquivoBackend = Join-Path $pastaBackend 'app\main.py'
 $arquivoFlutter = Join-Path $pastaFrontend 'pubspec.yaml'
-$scriptDemonstracao = Join-Path $pastaBackend 'criar_dados_demonstracao.py'
+$scriptDemonstracao = Join-Path $pastaBackend 'seed_demonstracao.py'
 $scriptBackend = Join-Path $pastaBackend 'iniciar_backend.ps1'
 $executavelWindows = Join-Path $pastaFrontend 'build\windows\x64\runner\Release\ubs_saude.exe'
-$marcaBuildWindows = Join-Path $pastaFrontend 'build\windows\x64\runner\Release\native_assets.json'
 $pythonPrincipal = Join-Path $pastaBackend 'venv\Scripts\python.exe'
 $pythonAlternativo = Join-Path $pastaBackend '.venv-integracao\Scripts\python.exe'
 $requirements = Join-Path $pastaBackend 'requirements.txt'
@@ -91,8 +94,7 @@ function Parar-AplicativoAnterior {
 }
 
 function Testar-AplicativoAtualizado {
-    if (-not (Test-Path -LiteralPath $executavelWindows) -or
-        -not (Test-Path -LiteralPath $marcaBuildWindows)) { return $false }
+    if (-not (Test-Path -LiteralPath $executavelWindows)) { return $false }
     $fontes = @(
         Get-ChildItem -LiteralPath (Join-Path $pastaFrontend 'lib') -Recurse -File
         Get-ChildItem -LiteralPath (Join-Path $pastaFrontend 'assets') -Recurse -File -ErrorAction SilentlyContinue
@@ -105,7 +107,7 @@ function Testar-AplicativoAtualizado {
         Get-Item -LiteralPath (Join-Path $pastaFrontend 'pubspec.lock') -ErrorAction SilentlyContinue
     ) | Where-Object { $null -ne $_ }
     $maisRecente = ($fontes | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum
-    return (Get-Item -LiteralPath $marcaBuildWindows).LastWriteTimeUtc -ge $maisRecente
+    return (Get-Item -LiteralPath $executavelWindows).LastWriteTimeUtc -ge $maisRecente
 }
 
 foreach ($arquivo in @($arquivoBackend, $arquivoFlutter, $scriptDemonstracao, $scriptBackend, $setupEnv)) {
@@ -173,7 +175,7 @@ if (-not $flutter -and ($Dispositivo -ne 'windows' -or -not (Testar-AplicativoAt
 }
 
 if ($Dispositivo -eq 'windows') {
-    if (-not (Testar-AplicativoAtualizado)) {
+    if ($AtualizarTudo -or -not (Testar-AplicativoAtualizado)) {
         Write-Host 'Compilando a interface Flutter atualizada...' -ForegroundColor Cyan
         Push-Location $pastaFrontend
         try {
@@ -203,7 +205,9 @@ Write-Host ''
 Write-Host 'Acessos de demonstração:' -ForegroundColor Cyan
 Write-Host 'Administrador - CPF: 12345678909 - Senha: Admin@123'
 Write-Host 'Recepção      - CPF: 98765432100 - Senha: Recepcao@123'
-Write-Host 'Profissional  - CPF: 11144477735 - Senha: Profissional@123'
+Write-Host 'Enfermagem    - CPF: 39053344705 - Senha: Enfermagem@123'
+Write-Host 'Clínica geral - CPF: 11144477735 - Senha: Profissional@123'
+Write-Host 'Pediatria     - CPF: 16899535009 - Senha: Pediatria@123'
 Write-Host 'Paciente      - CPF: 52998224725 - Senha: Paciente@123'
 Write-Host ''
 Write-Host 'Faça login pelo CPF. O sistema abrirá automaticamente a tela do perfil correspondente.'

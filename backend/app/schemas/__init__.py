@@ -35,7 +35,7 @@ class InternalUserCreate(BaseModel):
     name: str = Field(min_length=3, max_length=80)
     cpf: str = Field(min_length=11, max_length=32)
     email: EmailStr
-    role: Literal["recepcao", "profissional"]
+    role: Literal["recepcao", "enfermagem", "profissional"]
     password: str = Field(min_length=8, max_length=128)
     password_confirmation: str = Field(min_length=8, max_length=128)
     active: bool = True
@@ -47,7 +47,7 @@ class InternalUserCreate(BaseModel):
 class InternalUserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=3, max_length=80)
     email: EmailStr | None = None
-    role: Literal["recepcao", "profissional"] | None = None
+    role: Literal["recepcao", "enfermagem", "profissional"] | None = None
     professional_registration: str | None = Field(default=None, max_length=40)
     specialty_id: int | None = None
     can_triage: bool | None = None

@@ -205,8 +205,13 @@ def migrate_database() -> None:
             "consultas": {
                 "chegada_em": "DATETIME",
                 "chegada_por": "INTEGER",
+                "falta_em": "DATETIME",
                 "triagem_por": "INTEGER",
                 "triagem_dados": "VARCHAR(2000)",
+                "triagem_em": "DATETIME",
+                "chamado_em": "DATETIME",
+                "iniciado_em": "DATETIME",
+                "concluido_em": "DATETIME",
             },
             "agendas_profissionais": {
                 "especialidade": "VARCHAR(80) DEFAULT 'Clínica geral'"
@@ -607,6 +612,8 @@ def appointments(user: User = Depends(current_user), db: Session = Depends(get_d
         query = query.where(Appointment.paciente_id == user.id)
     elif canonical_role(user.perfil) == "profissional":
         query = query.where(Appointment.medico_id == user.id)
+    elif user.perfil == "enfermagem":
+        query = query.where(Appointment.chegada_em.is_not(None))
     return [as_appointment(item, user.perfil != "paciente") for item in db.scalars(query).unique()]
 
 
@@ -721,13 +728,11 @@ def calendar_dates(
     user: User = Depends(require_roles("paciente")),
     db: Session = Depends(get_db),
 ):
-    if specialty.strip().casefold() != GENERAL_SPECIALTY.casefold():
-        return []
     rows = db.scalars(
         select(ProfessionalSchedule).where(
             ProfessionalSchedule.medico_id == doctor_id,
             func.lower(ProfessionalSchedule.especialidade)
-            == GENERAL_SPECIALTY.lower(),
+            == specialty.strip().lower(),
             ProfessionalSchedule.data_horario > datetime.now(),
         )
     )
@@ -751,8 +756,7 @@ def calendar_times(
     db: Session = Depends(get_db),
 ):
     if (
-        specialty.strip().casefold() != GENERAL_SPECIALTY.casefold()
-        or day < date.today()
+        day < date.today()
         or day.weekday() >= 5
     ):
         return []
@@ -764,7 +768,7 @@ def calendar_times(
             .where(
                 ProfessionalSchedule.medico_id == doctor_id,
                 func.lower(ProfessionalSchedule.especialidade)
-                == GENERAL_SPECIALTY.lower(),
+                == specialty.strip().lower(),
                 ProfessionalSchedule.data_horario >= start,
                 ProfessionalSchedule.data_horario < end,
                 ProfessionalSchedule.data_horario > datetime.now(),
@@ -800,7 +804,7 @@ def calendar_times(
             CalendarSlot(
                 doctor_id=doctor_id,
                 doctor_name=schedule.medico.nome,
-                specialty=GENERAL_SPECIALTY,
+                specialty=schedule.especialidade,
                 scheduled_at=at,
                 availability=availability,
                 label=label,
@@ -990,3 +994,6 @@ app.include_router(operations_router)
 from app.routes.admin import router as admin_router
 
 app.include_router(admin_router)
+from app.routes.staff import router as staff_router
+
+app.include_router(staff_router)

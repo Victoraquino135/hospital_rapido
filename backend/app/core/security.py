@@ -35,23 +35,17 @@ ROLE_PERMISSIONS = {
         "queue:read", "audit:read",
     ],
     "recepcao": ["appointments:read", "appointments:checkin", "queue:read"],
+    "enfermagem": ["queue:read", "triage:write"],
     "profissional": ["appointments:assigned", "queue:read", "care:update"],
 }
 
 
 def canonical_role(role: str) -> str:
-    return "profissional" if role in {"medico", "enfermagem"} else role
+    return "profissional" if role == "medico" else role
 
 
 def permissions_for(user: User) -> list[str]:
-    permissions = list(ROLE_PERMISSIONS.get(canonical_role(user.perfil), []))
-    if user.perfil == "enfermagem" or bool(
-        getattr(user, "perfil_profissional", None)
-        and user.perfil_profissional.autorizado_triagem
-        and user.perfil_profissional.ativo
-    ):
-        permissions.append("triage:write")
-    return permissions
+    return list(ROLE_PERMISSIONS.get(canonical_role(user.perfil), []))
 
 
 def digest(value):

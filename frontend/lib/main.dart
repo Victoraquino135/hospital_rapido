@@ -12,6 +12,7 @@ part 'config/accessibility.dart';
 part 'widgets/shared_widgets.dart';
 part 'widgets/password_rules.dart';
 part 'screens/dashboards.dart';
+part 'screens/staff_dashboard.dart';
 part 'screens/admin_dashboard.dart';
 part 'screens/auth_pages.dart';
 
@@ -33,7 +34,7 @@ class UbsApp extends StatelessWidget {
       animation: accessibility,
       builder: (_, __) {
         final contrast = accessibility.highContrast,
-            fg = contrast ? Colors.yellow : const Color(0xFF20242A);
+            fg = contrast ? Colors.yellow : const Color(0xFF212529);
         return MaterialApp(
             locale: const Locale('pt', 'BR'),
             supportedLocales: const [Locale('pt', 'BR')],
@@ -109,6 +110,7 @@ Widget homeForRole() => switch (ApiService.session!.role) {
       'paciente' => const PatientDashboard(),
       'admin' => const AdminDashboard(),
       'recepcao' => const StaffDashboard(),
+      'enfermagem' => const StaffDashboard(),
       'profissional' => const StaffDashboard(),
       _ => const LoginPage(),
     };

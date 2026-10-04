@@ -61,13 +61,11 @@ def validate_identity(name: str, cpf: str, password: str | None = None):
 
 
 def ensure_professional_fields(db: Session, role: str, registration: str | None, specialty_id: int | None):
-    if role != "profissional":
+    if role not in {"profissional", "enfermagem"}:
         return None
     specialty = db.get(Specialty, specialty_id) if specialty_id else None
     if not specialty or not specialty.ativo:
         raise HTTPException(422, {"field": "specialty_id", "message": "Selecione uma especialidade ativa."})
-    if specialty.nome.strip().casefold() != "Clínica Geral".casefold():
-        raise HTTPException(422, {"field": "specialty_id", "message": "No MVP, selecione somente Clínica Geral."})
     return specialty
 
 
@@ -78,7 +76,7 @@ def list_users(q: str | None = None, role: str | None = None, active: bool | Non
     if q:
         query = query.where(func.lower(User.nome).contains(q.strip().lower()))
     if role:
-        values = [role] if role != "profissional" else ["profissional", "medico", "enfermagem"]
+        values = [role] if role != "profissional" else ["profissional", "medico"]
         query = query.where(User.perfil.in_(values))
     if active is not None:
         query = query.where(User.ativo.is_(active))
@@ -100,11 +98,12 @@ def create_user(payload: InternalUserCreate, actor: User = Depends(require_roles
                 perfil=payload.role, ativo=payload.active, criado_por=actor.id, ultima_alteracao_por=actor.id)
     try:
         db.add(user); db.flush()
-        if payload.role == "profissional":
+        if payload.role in {"profissional", "enfermagem"}:
             registration = (payload.professional_registration or "").strip() or f"SEM-REGISTRO-{user.id}"
             db.add(ProfessionalProfile(usuario_id=user.id,
                 registro_profissional=registration,
-                especialidade_id=payload.specialty_id, autorizado_triagem=payload.can_triage,
+                especialidade_id=payload.specialty_id,
+                autorizado_triagem=payload.role == "enfermagem",
                 ativo=payload.active))
         audit(db, actor, "usuario_criado", "usuario", user.id,
               {"perfil": payload.role, "ativo": payload.active})
@@ -135,7 +134,7 @@ def update_user(user_id: int, payload: InternalUserUpdate,
             raise HTTPException(409, {"field": "email", "message": "E-mail já cadastrado."})
         user.email = email
     profile = db.scalar(select(ProfessionalProfile).where(ProfessionalProfile.usuario_id == user.id))
-    if role == "profissional":
+    if role in {"profissional", "enfermagem"}:
         registration = ((payload.professional_registration or "").strip()
                         or (profile.registro_profissional if profile else None)
                         or f"SEM-REGISTRO-{user.id}")
@@ -143,13 +142,13 @@ def update_user(user_id: int, payload: InternalUserUpdate,
         ensure_professional_fields(db, role, registration, specialty_id)
         if profile is None:
             profile = ProfessionalProfile(usuario_id=user.id, registro_profissional=registration,
-                especialidade_id=specialty_id, autorizado_triagem=bool(payload.can_triage), ativo=user.ativo)
+                especialidade_id=specialty_id,
+                autorizado_triagem=role == "enfermagem", ativo=user.ativo)
             db.add(profile)
         else:
             profile.registro_profissional = registration
             profile.especialidade_id = specialty_id
-            if payload.can_triage is not None:
-                profile.autorizado_triagem = payload.can_triage
+            profile.autorizado_triagem = role == "enfermagem"
     elif profile:
         profile.ativo = False
     previous_role = canonical_role(user.perfil)
@@ -288,6 +287,7 @@ def register_absence(appointment_id: int, actor: User = Depends(require_roles("a
     if row.data_horario.date() != date.today():
         raise HTTPException(409, "A falta manual só pode ser registrada no dia da consulta")
     row.status = "falta"
+    row.falta_em = datetime.now()
     db.add(AppointmentStatusHistory(consulta_id=row.id, status_anterior="agendado",
                                     status_novo="falta", alterado_por=actor.id))
     audit(db, actor, "falta_registrada", "consulta", row.id)
@@ -330,8 +330,7 @@ class SpecialtyInput(BaseModel):
 @router.get("/specialties")
 def list_specialties(actor: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     return [{"id": row.id, "name": row.nome, "active": row.ativo}
-            for row in db.scalars(select(Specialty).where(
-                func.lower(Specialty.nome) == "clínica geral").order_by(Specialty.nome))]
+            for row in db.scalars(select(Specialty).order_by(Specialty.nome))]
 
 
 class AdminCreate(BaseModel):
@@ -365,8 +364,6 @@ def create_admin(payload: AdminCreate, actor: User = Depends(require_roles("admi
 @router.post("/specialties", status_code=201)
 def create_specialty(payload: SpecialtyInput, actor: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     name = " ".join(payload.name.split())
-    if name.casefold() != "Clínica Geral".casefold():
-        raise HTTPException(422, "No MVP, a única especialidade permitida é Clínica Geral")
     if db.scalar(select(Specialty.id).where(func.lower(Specialty.nome) == name.lower())):
         raise HTTPException(409, "Especialidade já cadastrada")
     row = Specialty(nome=name, ativo=True); db.add(row); db.flush()
@@ -380,8 +377,6 @@ def update_specialty(specialty_id: int, payload: SpecialtyInput,
     row = db.get(Specialty, specialty_id)
     if not row: raise HTTPException(404, "Especialidade não encontrada")
     name = " ".join(payload.name.split())
-    if name.casefold() != "Clínica Geral".casefold():
-        raise HTTPException(422, "No MVP, a única especialidade permitida é Clínica Geral")
     if db.scalar(select(Specialty.id).where(func.lower(Specialty.nome) == name.lower(),
                                              Specialty.id != row.id)):
         raise HTTPException(409, "Especialidade já cadastrada")

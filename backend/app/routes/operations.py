@@ -30,21 +30,29 @@ class StatusInput(BaseModel):
 
 @router.get('/specialties', response_model=list[CatalogItem])
 def specialties(user=Depends(current_user), db: Session = Depends(get_db)):
-    row = db.scalar(select(Specialty).where(
-        func.lower(Specialty.nome) == GENERAL_SPECIALTY.lower(),
-        Specialty.ativo.is_(True),
-    ))
-    return [{'id': row.id, 'name': GENERAL_SPECIALTY}] if row else []
+    return [{'id': row.id, 'name': row.nome} for row in db.scalars(
+        select(Specialty).where(Specialty.ativo.is_(True)).order_by(Specialty.nome)
+    )]
 
 @router.get('/professionals', response_model=list[CatalogItem])
 def professionals(specialty: str | None = None, user=Depends(current_user), db: Session = Depends(get_db)):
-    query = select(User).where(User.perfil.in_(['profissional', 'medico', 'enfermagem']), User.ativo.is_(True))
+    rows = list(db.scalars(select(User).where(
+        User.perfil.in_(['profissional', 'medico']), User.ativo.is_(True)
+    ).order_by(User.nome)))
     if specialty:
-        if not is_general_specialty(specialty):
-            return []
-        query = query.join(ProfessionalSchedule, ProfessionalSchedule.medico_id == User.id).where(
-            func.lower(ProfessionalSchedule.especialidade) == GENERAL_SPECIALTY.lower())
-    return [{'id': x.id, 'name': x.nome} for x in db.scalars(query).unique()]
+        normalized = specialty.strip().lower()
+        rows = [row for row in rows if (
+            db.scalar(select(ProfessionalProfile.id).join(Specialty).where(
+                ProfessionalProfile.usuario_id == row.id,
+                ProfessionalProfile.ativo.is_(True), Specialty.ativo.is_(True),
+                func.lower(Specialty.nome) == normalized,
+            ))
+            or db.scalar(select(ProfessionalSchedule.id).where(
+                ProfessionalSchedule.medico_id == row.id,
+                func.lower(ProfessionalSchedule.especialidade) == normalized,
+            ))
+        )]
+    return [{'id': x.id, 'name': x.nome} for x in rows]
 
 @router.get('/schedules')
 def schedules(user=Depends(require_roles('admin')), db: Session = Depends(get_db)):
@@ -63,17 +71,18 @@ def validate_schedule(payload, db):
         time(hour, 0) for hour in (7, 8, 9, 10, 11, 13, 14, 15, 16, 17)
     }:
         raise HTTPException(422, 'Horário inválido; use 07:00–11:00 ou 13:00–17:00')
-    if not is_general_specialty(payload.specialty):
-        raise HTTPException(422, 'No MVP, a única especialidade disponível é Clínica Geral')
-    if not db.scalar(select(Specialty).where(func.lower(Specialty.nome) == GENERAL_SPECIALTY.lower())):
-        db.add(Specialty(nome=GENERAL_SPECIALTY))
+    profile = db.scalar(select(ProfessionalProfile).where(
+        ProfessionalProfile.usuario_id == professional.id,
+        ProfessionalProfile.ativo.is_(True)))
+    if not profile or profile.especialidade.nome.casefold() != payload.specialty.strip().casefold():
+        raise HTTPException(422, 'O profissional não está vinculado à especialidade informada')
 
 @router.post('/schedules', status_code=201)
 def create_schedule(payload: ScheduleInput, user=Depends(require_roles('admin')), db: Session = Depends(get_db)):
     validate_schedule(payload, db)
     if db.scalar(select(ProfessionalSchedule).where(ProfessionalSchedule.medico_id == payload.doctor_id, ProfessionalSchedule.data_horario == payload.scheduled_at)):
         raise HTTPException(409, 'Horário já cadastrado')
-    row = ProfessionalSchedule(medico_id=payload.doctor_id, especialidade=GENERAL_SPECIALTY, data_horario=payload.scheduled_at, bloqueado=payload.blocked)
+    row = ProfessionalSchedule(medico_id=payload.doctor_id, especialidade=payload.specialty.strip(), data_horario=payload.scheduled_at, bloqueado=payload.blocked)
     db.add(row); db.commit()
     return {'id': row.id}
 
@@ -86,7 +95,7 @@ def edit_schedule(schedule_id: int, payload: ScheduleInput, user=Depends(require
         raise HTTPException(409, 'Horário ocupado não pode ser alterado')
     if db.scalar(select(ProfessionalSchedule).where(ProfessionalSchedule.id != row.id, ProfessionalSchedule.medico_id == payload.doctor_id, ProfessionalSchedule.data_horario == payload.scheduled_at)):
         raise HTTPException(409, 'Horário já cadastrado')
-    row.medico_id, row.especialidade, row.data_horario, row.bloqueado = payload.doctor_id, GENERAL_SPECIALTY, payload.scheduled_at, payload.blocked
+    row.medico_id, row.especialidade, row.data_horario, row.bloqueado = payload.doctor_id, payload.specialty.strip(), payload.scheduled_at, payload.blocked
     db.commit()
     return {'id': row.id}
 
@@ -97,10 +106,8 @@ def change_status(appointment_id: int, payload: StatusInput, user=Depends(requir
     previous_by_status = {'em_espera': {'agendado'}, 'falta': {'agendado'}, 'em_triagem': {'em_espera'}, 'em_atendimento': {'em_triagem'}, 'concluido': {'em_atendimento'}}
     previous = previous_by_status[payload.status]
     role = canonical_role(user.perfil)
-    profile = db.scalar(select(ProfessionalProfile).where(ProfessionalProfile.usuario_id == user.id, ProfessionalProfile.ativo.is_(True)))
-    can_triage = user.perfil == 'enfermagem' or bool(profile and profile.autorizado_triagem)
     authorized = ((payload.status in {'em_espera', 'falta'} and role in {'recepcao', 'admin'}) or
-                  (payload.status == 'em_triagem' and role == 'profissional' and can_triage) or
+                  (payload.status == 'em_triagem' and role == 'enfermagem') or
                   (payload.status in {'em_atendimento', 'concluido'} and role == 'profissional' and row.medico_id == user.id))
     if not authorized:
         raise HTTPException(403, 'Perfil não autorizado para esta etapa')
@@ -118,6 +125,11 @@ def change_status(appointment_id: int, payload: StatusInput, user=Depends(requir
         row.classificacao_risco, row.triagem_dados, row.triagem_por = payload.risk, payload.triage, user.id
     elif payload.risk or payload.triage:
         raise HTTPException(403, 'Somente profissional autorizado pode registrar a triagem')
+    now = datetime.now()
+    if payload.status == 'falta': row.falta_em = now
+    if payload.status == 'em_triagem': row.triagem_em = now
+    if payload.status == 'em_atendimento': row.iniciado_em = now
+    if payload.status == 'concluido': row.concluido_em = now
     row.status = payload.status
     db.add(AppointmentStatusHistory(consulta_id=row.id, status_anterior=old_status,
                                     status_novo=row.status, alterado_por=user.id))

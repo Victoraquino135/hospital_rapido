@@ -129,11 +129,13 @@ class ApiService {
       [Object? body]) async {
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final r = await (method == 'GET'
-              ? http.get(uri, headers: _headers)
-              : method == 'PUT'
-                  ? http.put(uri, headers: _headers, body: jsonEncode(body))
-                  : http.post(uri, headers: _headers, body: jsonEncode(body)))
+      final r = await (switch (method) {
+        'GET' => http.get(uri, headers: _headers),
+        'PUT' => http.put(uri, headers: _headers, body: jsonEncode(body)),
+        'PATCH' => http.patch(uri, headers: _headers, body: jsonEncode(body)),
+        'DELETE' => http.delete(uri, headers: _headers),
+        _ => http.post(uri, headers: _headers, body: jsonEncode(body)),
+      })
           .timeout(const Duration(seconds: 45));
       if (r.statusCode == 401 && path != '/auth/login') {
         await logout();
@@ -235,6 +237,98 @@ class ApiService {
 
   Future<void> registerAbsence(int id) async {
     await _post('/admin/appointments/$id/absence', {});
+  }
+
+  Future<Map<String, dynamic>> receptionSummary([DateTime? day]) async =>
+      jsonDecode((await _request(
+              'GET', '/recepcao/resumo?day=${_day(day ?? DateTime.now())}'))
+          .body) as Map<String, dynamic>;
+
+  Future<List<AdminAppointment>> receptionAppointments(
+      {DateTime? day,
+      String? specialty,
+      int? professionalId,
+      String? status,
+      String? patient}) async {
+    final query = <String, String>{
+      'day': _day(day ?? DateTime.now()),
+      if (specialty?.isNotEmpty ?? false) 'specialty': specialty!,
+      if (professionalId != null) 'professional_id': '$professionalId',
+      if (status?.isNotEmpty ?? false) 'status': status!,
+      if (patient?.trim().isNotEmpty ?? false) 'patient': patient!.trim(),
+    };
+    return _list(await _request('GET',
+            '/recepcao/agendamentos?${Uri(queryParameters: query).query}'))
+        .map(AdminAppointment.fromJson)
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> receptionDetails(int id) async =>
+      jsonDecode((await _request('GET', '/recepcao/agendamentos/$id')).body)
+          as Map<String, dynamic>;
+
+  Future<void> receptionCheckIn(int id) async {
+    await _request('PATCH', '/recepcao/agendamentos/$id/check-in', {});
+  }
+
+  Future<void> receptionAbsence(int id) async {
+    await _request('PATCH', '/recepcao/agendamentos/$id/nao-compareceu', {});
+  }
+
+  Future<Map<String, dynamic>> nursingSummary([DateTime? day]) async =>
+      jsonDecode((await _request(
+              'GET', '/enfermagem/resumo?day=${_day(day ?? DateTime.now())}'))
+          .body) as Map<String, dynamic>;
+
+  Future<List<AdminAppointment>> nursingQueue(
+      {DateTime? day, String? specialty, String? status, String? risk}) async {
+    final query = <String, String>{
+      'day': _day(day ?? DateTime.now()),
+      if (specialty?.isNotEmpty ?? false) 'specialty': specialty!,
+      if (status?.isNotEmpty ?? false) 'status': status!,
+      if (risk?.isNotEmpty ?? false) 'risk': risk!,
+    };
+    return _list(await _request(
+            'GET', '/enfermagem/fila?${Uri(queryParameters: query).query}'))
+        .map(AdminAppointment.fromJson)
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> nursingDetails(int id) async =>
+      jsonDecode((await _request('GET', '/enfermagem/agendamentos/$id')).body)
+          as Map<String, dynamic>;
+
+  Future<void> classifyRisk(int id, String level, String? observation) async {
+    await _request(
+        'PATCH', '/enfermagem/agendamentos/$id/classificacao-risco', {
+      'level': level,
+      if (observation?.trim().isNotEmpty ?? false)
+        'observation': observation!.trim(),
+    });
+  }
+
+  Future<void> startCare(int id) async {
+    await _request(
+        'PATCH', '/profissional/agendamentos/$id/iniciar-atendimento', {});
+  }
+
+  Future<void> completeCare(int id) async {
+    await _request(
+        'PATCH', '/profissional/agendamentos/$id/concluir-atendimento', {});
+  }
+
+  Future<List<AdminAppointment>> professionalQueue([DateTime? day]) async =>
+      _list(await _request('GET',
+              '/profissional/fila?day=${_day(day ?? DateTime.now())}'))
+          .map(AdminAppointment.fromJson)
+          .toList();
+
+  Future<Map<String, dynamic>> professionalDetails(int id) async =>
+      jsonDecode((await _request('GET', '/profissional/agendamentos/$id')).body)
+          as Map<String, dynamic>;
+
+  Future<void> callPatient(int id) async {
+    await _request('PATCH', '/profissional/agendamentos/$id/chamar', {});
   }
 
   Future<Map<String, dynamic>> adminAppointmentDetails(int id) async =>

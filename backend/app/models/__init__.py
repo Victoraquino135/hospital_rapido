@@ -54,8 +54,13 @@ class Appointment(Base):
     classificacao_risco: Mapped[str | None] = mapped_column(String(30), nullable=True)
     chegada_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     chegada_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True)
+    falta_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     triagem_por: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True)
     triagem_dados: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    triagem_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    chamado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    iniciado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    concluido_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     paciente = relationship("User", foreign_keys=[paciente_id], back_populates="consultas_paciente")
     medico = relationship("User", foreign_keys=[medico_id], back_populates="consultas_medico")
 
@@ -148,6 +153,20 @@ class AppointmentStatusHistory(Base):
     status_novo: Mapped[str] = mapped_column(String(25))
     alterado_por: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class RiskClassification(Base):
+    __tablename__ = "classificacoes_risco"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    consulta_id: Mapped[int] = mapped_column(
+        ForeignKey("consultas.id"), unique=True, index=True
+    )
+    profissional_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    nivel_risco: Mapped[str] = mapped_column(String(20), index=True)
+    observacao: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    classificado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    consulta = relationship("Appointment")
+    profissional = relationship("User")
 
 
 class AuditLog(Base):
