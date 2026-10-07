@@ -1,7 +1,8 @@
 part of '../main.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.api});
+  final ApiService? api;
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
@@ -11,12 +12,13 @@ class _LoginPageState extends State<LoginPage> {
   final formKey = GlobalKey<FormState>();
   bool busy = false, hide = true;
   Future<void> login() async {
+    if (busy) return;
     if (!validateAndFocus(formKey)) {
       return;
     }
     setState(() => busy = true);
     try {
-      await ApiService().login(document.text, password.text);
+      await (widget.api ?? ApiService()).login(document.text, password.text);
       if (mounted) {
         Navigator.pushAndRemoveUntil(context,
             MaterialPageRoute(builder: (_) => homeForRole()), (_) => false);
@@ -68,14 +70,12 @@ class _LoginPageState extends State<LoginPage> {
                             icon: Icon(hide
                                 ? Icons.visibility_off_outlined
                                 : Icons.visibility_outlined))),
-                    SizedBox(
-                        height: 56,
-                        child: FilledButton(
-                            onPressed: busy ? null : login,
-                            child: Text(busy ? 'Entrando...' : 'Entrar →',
-                                style: const TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700)))),
+                    AppActionButton(
+                        label: 'Entrar →',
+                        icon: Icons.login,
+                        onPressed: login,
+                        busy: busy,
+                        expand: true),
                     TextButton(
                         onPressed: () => Navigator.push(
                             context,
@@ -338,11 +338,12 @@ class _RegisterPageState extends State<RegisterPage> {
                         validator: (v) => v == password.text
                             ? null
                             : 'As senhas não conferem.'),
-                    SizedBox(
-                        height: 52,
-                        child: FilledButton(
-                            onPressed: busy ? null : register,
-                            child: Text(busy ? 'Enviando...' : 'Cadastrar'))),
+                    AppActionButton(
+                        label: 'Cadastrar',
+                        icon: Icons.person_add_alt_1,
+                        onPressed: register,
+                        busy: busy,
+                        expand: true),
                     TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: const Text('Já tem uma conta? Fazer login'))
@@ -499,11 +500,11 @@ class _ResponsiblePageState extends State<ResponsiblePage> {
                         errorText: serverErrors['guardian_email'],
                         validator: (v) => guardianEmailRule(
                             v, widget.patientData['email'] ?? '')),
-                    SizedBox(
-                        height: 52,
-                        child: FilledButton(
-                            onPressed: busy ? null : save,
-                            child: Text(
-                                busy ? 'Salvando...' : 'Concluir cadastro')))
+                    AppActionButton(
+                        label: 'Concluir cadastro',
+                        icon: Icons.check_circle_outline,
+                        onPressed: save,
+                        busy: busy,
+                        expand: true)
                   ]))));
 }

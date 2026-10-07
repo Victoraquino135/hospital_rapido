@@ -148,17 +148,18 @@ class _RecoveryPageState extends State<RecoveryPage> {
                               ? null
                               : 'As senhas não conferem.'),
                     ],
-                    FilledButton(
-                        onPressed: busy ? null : next,
-                        child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            child: Text(busy
-                                ? 'Aguarde...'
-                                : step == 0
-                                    ? 'Enviar código'
-                                    : step == 1
-                                        ? 'Validar código'
-                                        : 'Salvar nova senha'))),
+                    AppActionButton(
+                        label: step == 0
+                            ? 'Enviar código'
+                            : step == 1
+                                ? 'Validar código'
+                                : 'Salvar nova senha',
+                        icon: step == 2
+                            ? Icons.lock_reset_outlined
+                            : Icons.arrow_forward,
+                        onPressed: next,
+                        busy: busy,
+                        expand: true),
                     TextButton(
                         onPressed: busy ? null : () => Navigator.pop(context),
                         child: const Text('Voltar')),

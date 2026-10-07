@@ -18,6 +18,7 @@ part 'screens/dashboards.dart';
 part 'screens/staff_dashboard.dart';
 part 'screens/admin_dashboard.dart';
 part 'screens/auth_pages.dart';
+part 'screens/email_verification_page.dart';
 
 const blue = Color(0xFF005A9C);
 const green = Color(0xFF1E824C);
