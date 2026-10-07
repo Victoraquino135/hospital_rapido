@@ -79,6 +79,7 @@ class ResponsiveAppShell extends StatelessWidget {
           Expanded(child: _content(context, showBrand: true)),
           if (destinations.isNotEmpty)
             NavigationBar(
+              height: 72,
               selectedIndex: selectedIndex,
               onDestinationSelected: onDestinationSelected,
               destinations: [

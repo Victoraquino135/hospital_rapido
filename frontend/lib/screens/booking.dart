@@ -6,9 +6,14 @@ Future<void> booking(BuildContext context, ApiService api, Appointment? old,
       context: context,
       isScrollControlled: true,
       builder: (_) => SafeArea(
-          child: FractionallySizedBox(
-              heightFactor: .9,
-              child: BookingPanel(api: api, old: old, onChanged: done))));
+          child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1080),
+                  child: FractionallySizedBox(
+                      heightFactor: .92,
+                      child: BookingPanel(
+                          api: api, old: old, onChanged: done))))));
 }
 
 class BookingPanel extends StatefulWidget {
@@ -170,164 +175,198 @@ class _BookingPanelState extends State<BookingPanel> {
     }
   }
 
+  int get currentStep => chosen != null
+      ? 4
+      : day != null
+          ? 3
+          : doctor != null
+              ? 2
+              : specialty != null
+                  ? 1
+                  : 0;
+
   @override
-  Widget build(BuildContext context) => Padding(
-      padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.viewInsetsOf(context).bottom + 16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(
-              child: Text(
-                  widget.old == null
-                      ? 'Agendar consulta'
-                      : 'Reagendar consulta',
-                  style: Theme.of(context).textTheme.headlineSmall)),
-          IconButton(
-              tooltip: 'Fechar',
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close))
-        ]),
-        const SizedBox(height: 12),
-        Expanded(
-            child: ListView(children: [
-          if (specialties.isNotEmpty)
-            DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: specialty,
-                decoration: const InputDecoration(labelText: 'Especialidade'),
-                items: specialties
-                    .map((x) => DropdownMenuItem(
-                        value: x['name'] as String,
-                        child: Text(x['name'] as String)))
-                    .toList(),
-                onChanged: loading || saving || widget.old != null
-                    ? null
-                    : (v) {
-                        if (v == null) {
-                          return;
-                        }
-                        setState(() => specialty = v);
-                        loadProfessionals();
-                      }),
-          if (!loading && specialties.isEmpty && error == null)
-            const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Nenhuma especialidade cadastrada.')),
-          const SizedBox(height: 12),
-          if (specialty != null && professionals.isNotEmpty)
-            DropdownButtonFormField<int>(
-                key: ValueKey('doctor-$specialty'),
-                isExpanded: true,
-                initialValue: doctor,
-                decoration: const InputDecoration(labelText: 'Profissional'),
-                items: professionals
-                    .map((x) => DropdownMenuItem(
-                        value: x['id'] as int,
-                        child: Text(x['name'] as String)))
-                    .toList(),
-                onChanged: loading || saving
-                    ? null
-                    : (v) {
-                        if (v == null) {
-                          return;
-                        }
-                        setState(() => doctor = v);
-                        loadDates();
-                      }),
-          if (!loading &&
-              specialty != null &&
-              professionals.isEmpty &&
-              error == null)
-            const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Nenhum profissional para esta especialidade.')),
-          const SizedBox(height: 12),
-          if (doctor != null && dates.isNotEmpty)
-            DropdownButtonFormField<DateTime>(
-                key: ValueKey('date-$doctor'),
-                isExpanded: true,
-                initialValue: day,
-                decoration: const InputDecoration(labelText: 'Data disponível'),
-                items: dates
-                    .map((x) => DropdownMenuItem(
-                        value: x, child: Text(showOnlyDate(x))))
-                    .toList(),
-                onChanged: loading || saving
-                    ? null
-                    : (v) {
-                        if (v == null) {
-                          return;
-                        }
-                        setState(() => day = v);
-                        loadTimes();
-                      }),
-          if (!loading && doctor != null && dates.isEmpty && error == null)
-            const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Nenhuma data disponível.')),
-          const SizedBox(height: 12),
-          if (day != null && times.isNotEmpty)
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final slot in times)
-                ChoiceChip(
-                    tooltip: slot.label,
-                    label: Text(
-                        '${slot.scheduledAt.hour.toString().padLeft(2, '0')}:${slot.scheduledAt.minute.toString().padLeft(2, '0')} — ${slot.label}'),
-                    selected: chosen?.scheduledAt == slot.scheduledAt,
-                    onSelected: saving || !slot.selectable
-                        ? null
-                        : (_) => setState(() => chosen = slot)),
-            ]),
-          if (!loading && day != null && times.isEmpty && error == null)
-            const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Nenhum horário livre nesta data.')),
-          if (loading)
-            const Center(
-                child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: CircularProgressIndicator())),
-          if (error != null)
-            Column(children: [
-              Text(error!),
-              OutlinedButton(
-                  onPressed: () {
-                    if (day != null) {
-                      loadTimes();
-                    } else if (doctor != null) {
-                      loadDates();
-                    } else if (specialty != null) {
-                      loadProfessionals();
-                    } else {
-                      loadSpecialties();
-                    }
-                  },
-                  child: const Text('Tentar novamente'))
-            ]),
-          if (chosen != null)
-            Card(
-                child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Resumo',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text(specialty!),
-                          Text(professionals.firstWhere(
-                              (x) => x['id'] == doctor)['name'] as String),
-                          Text(showDate(chosen!.scheduledAt)),
-                        ]))),
-        ])),
-        FilledButton(
-            onPressed: chosen == null || saving || loading ? null : confirm,
-            child: saving
-                ? const CircularProgressIndicator()
-                : Text(widget.old == null
-                    ? 'Confirmar agendamento'
-                    : 'Confirmar reagendamento')),
-      ]));
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
+        final compact = c.maxWidth < 600;
+        return Padding(
+            padding: EdgeInsets.only(
+                left: compact ? 16 : 28,
+                right: compact ? 16 : 28,
+                top: compact ? 16 : 24,
+                bottom: MediaQuery.viewInsetsOf(context).bottom + 16),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    Expanded(
+                        child: Text(
+                            widget.old == null
+                                ? 'Agendar consulta'
+                                : 'Reagendar consulta',
+                            style: Theme.of(context).textTheme.headlineSmall)),
+                    IconButton(
+                        tooltip: 'Fechar',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close))
+                  ]),
+                  Text('Etapa ${currentStep + 1} de 5',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: accessibility.highContrast ? null : blue)),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(value: (currentStep + 1) / 5),
+                  const SizedBox(height: 12),
+                  Expanded(
+                      child: ListView(children: [
+                    if (specialties.isNotEmpty)
+                      DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: specialty,
+                          decoration:
+                              const InputDecoration(labelText: 'Especialidade'),
+                          items: specialties
+                              .map((x) => DropdownMenuItem(
+                                  value: x['name'] as String,
+                                  child: Text(x['name'] as String)))
+                              .toList(),
+                          onChanged: loading || saving || widget.old != null
+                              ? null
+                              : (v) {
+                                  if (v == null) {
+                                    return;
+                                  }
+                                  setState(() => specialty = v);
+                                  loadProfessionals();
+                                }),
+                    if (!loading && specialties.isEmpty && error == null)
+                      const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('Nenhuma especialidade cadastrada.')),
+                    const SizedBox(height: 12),
+                    if (specialty != null && professionals.isNotEmpty)
+                      DropdownButtonFormField<int>(
+                          key: ValueKey('doctor-$specialty'),
+                          isExpanded: true,
+                          initialValue: doctor,
+                          decoration:
+                              const InputDecoration(labelText: 'Profissional'),
+                          items: professionals
+                              .map((x) => DropdownMenuItem(
+                                  value: x['id'] as int,
+                                  child: Text(x['name'] as String)))
+                              .toList(),
+                          onChanged: loading || saving
+                              ? null
+                              : (v) {
+                                  if (v == null) {
+                                    return;
+                                  }
+                                  setState(() => doctor = v);
+                                  loadDates();
+                                }),
+                    if (!loading &&
+                        specialty != null &&
+                        professionals.isEmpty &&
+                        error == null)
+                      const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text(
+                              'Nenhum profissional para esta especialidade.')),
+                    const SizedBox(height: 12),
+                    if (doctor != null && dates.isNotEmpty)
+                      DropdownButtonFormField<DateTime>(
+                          key: ValueKey('date-$doctor'),
+                          isExpanded: true,
+                          initialValue: day,
+                          decoration: const InputDecoration(
+                              labelText: 'Data disponível'),
+                          items: dates
+                              .map((x) => DropdownMenuItem(
+                                  value: x, child: Text(showOnlyDate(x))))
+                              .toList(),
+                          onChanged: loading || saving
+                              ? null
+                              : (v) {
+                                  if (v == null) {
+                                    return;
+                                  }
+                                  setState(() => day = v);
+                                  loadTimes();
+                                }),
+                    if (!loading &&
+                        doctor != null &&
+                        dates.isEmpty &&
+                        error == null)
+                      const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('Nenhuma data disponível.')),
+                    const SizedBox(height: 12),
+                    if (day != null && times.isNotEmpty)
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        for (final slot in times)
+                          ChoiceChip(
+                              tooltip: slot.label,
+                              label: Text(
+                                  '${slot.scheduledAt.hour.toString().padLeft(2, '0')}:${slot.scheduledAt.minute.toString().padLeft(2, '0')} — ${slot.label}'),
+                              selected: chosen?.scheduledAt == slot.scheduledAt,
+                              onSelected: saving || !slot.selectable
+                                  ? null
+                                  : (_) => setState(() => chosen = slot)),
+                      ]),
+                    if (!loading &&
+                        day != null &&
+                        times.isEmpty &&
+                        error == null)
+                      const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('Nenhum horário livre nesta data.')),
+                    if (loading)
+                      const Center(
+                          child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator())),
+                    if (error != null)
+                      Column(children: [
+                        InfoPanel(icon: Icons.error_outline, text: error!),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                            onPressed: () {
+                              if (day != null) {
+                                loadTimes();
+                              } else if (doctor != null) {
+                                loadDates();
+                              } else if (specialty != null) {
+                                loadProfessionals();
+                              } else {
+                                loadSpecialties();
+                              }
+                            },
+                            child: const Text('Tentar novamente'))
+                      ]),
+                    if (chosen != null)
+                      Card(
+                          child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Resumo',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                    Text(specialty!),
+                                    Text(professionals.firstWhere(
+                                            (x) => x['id'] == doctor)['name']
+                                        as String),
+                                    Text(showDate(chosen!.scheduledAt)),
+                                  ]))),
+                  ])),
+                  AppActionButton(
+                      label: widget.old == null
+                          ? 'Confirmar agendamento'
+                          : 'Confirmar reagendamento',
+                      icon: Icons.event_available_outlined,
+                      onPressed: chosen == null || loading ? null : confirm,
+                      busy: saving,
+                      expand: true),
+                ]));
+      });
 }

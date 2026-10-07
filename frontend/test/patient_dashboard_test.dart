@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ubs_saude/main.dart';
@@ -5,17 +7,24 @@ import 'package:ubs_saude/models/api_models.dart';
 import 'package:ubs_saude/services/api_service.dart';
 
 class FakePatientApi extends ApiService {
-  FakePatientApi({this.hasAppointment = true});
+  FakePatientApi({
+    this.hasAppointment = true,
+    this.specialtyName = 'Clínica geral',
+    this.professionalName = 'Dra. Ana Souza',
+  });
   bool hasAppointment;
+  final String specialtyName;
+  final String professionalName;
   bool offline = false, expired = false;
   int summaryCalls = 0;
   int bookings = 0;
+  Completer<void>? bookingCompleter;
   String status = 'agendado';
   late final at = DateTime.now().add(const Duration(days: 3));
   Appointment get item => Appointment.fromJson({
         'id': 12,
-        'specialty': 'Clínica geral',
-        'professional': 'Dra. Ana Souza',
+        'specialty': specialtyName,
+        'professional': professionalName,
         'doctor_id': 8,
         'scheduled_at': at.toIso8601String(),
         'status': status,
@@ -31,8 +40,8 @@ class FakePatientApi extends ApiService {
         'next_appointment': hasAppointment
             ? {
                 'id': 12,
-                'specialty': 'Clínica geral',
-                'professional': 'Dra. Ana Souza',
+                'specialty': specialtyName,
+                'professional': professionalName,
                 'doctor_id': 8,
                 'scheduled_at': at.toIso8601String(),
                 'status': status,
@@ -56,11 +65,11 @@ class FakePatientApi extends ApiService {
       hasAppointment ? [item] : [];
   @override
   Future<List<Map<String, dynamic>>> specialties() async => [
-        {'id': 1, 'name': 'Clínica geral'}
+        {'id': 1, 'name': specialtyName}
       ];
   @override
   Future<List<Map<String, dynamic>>> professionals(String specialty) async => [
-        {'id': 8, 'name': 'Dra. Ana Souza'}
+        {'id': 8, 'name': professionalName}
       ];
   @override
   Future<List<DateTime>> availableDates(String specialty, int doctorId) async =>
@@ -71,19 +80,83 @@ class FakePatientApi extends ApiService {
       [
         Slot.fromJson({
           'doctor_id': 8,
-          'doctor_name': 'Dra. Ana Souza',
-          'specialty': 'Clínica geral',
+          'doctor_name': professionalName,
+          'specialty': specialtyName,
           'scheduled_at': at.toIso8601String()
         })
       ];
   @override
   Future<void> book(Slot slot) async {
     bookings++;
+    if (bookingCompleter != null) await bookingCompleter!.future;
     hasAppointment = true;
   }
 }
 
 void main() {
+  testWidgets('patient_wide_layout_prioritizes_next_appointment',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester
+        .pumpWidget(MaterialApp(home: PatientDashboard(api: FakePatientApi())));
+    await tester.pump();
+    expect(find.byType(ResponsiveAppShell), findsOneWidget);
+    expect(find.text('Próxima consulta'), findsOneWidget);
+    expect(find.text('Agendar consulta'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('patient_compact_layout_keeps_booking_action_48px',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+        home: PatientDashboard(api: FakePatientApi(hasAppointment: false))));
+    await tester.pump();
+    final action =
+        find.widgetWithText(AppActionButton, 'Agendar consulta').first;
+    expect(action, findsOneWidget);
+    expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long_professional_and_specialty_wrap_without_overflow',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = FakePatientApi(
+      specialtyName: 'Clínica médica integrada da família e comunidade',
+      professionalName: 'Dra. Ana Carolina de Souza Albuquerque Ferreira',
+    );
+    await tester.pumpWidget(MaterialApp(home: PatientDashboard(api: api)));
+    await tester.pump();
+    expect(find.text(api.specialtyName), findsOneWidget);
+    expect(find.text(api.professionalName), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('max_text_scale_keeps_status_and_action_visible', (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    accessibility.fontSizeScale = 1.5;
+    addTearDown(() => accessibility.fontSizeScale = 1);
+    await tester
+        .pumpWidget(MaterialApp(home: PatientDashboard(api: FakePatientApi())));
+    await tester.pump();
+    expect(find.text('Agendada'), findsWidgets);
+    expect(find.text('Agendar consulta'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dashboard mostra paciente, próxima consulta e navegação desktop',
       (tester) async {
     tester.view.physicalSize = const Size(1100, 850);
@@ -160,6 +233,42 @@ void main() {
     expect(api.bookings, 1);
     expect(find.text('Dra. Ana Souza'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('booking_submits_once_while_request_is_pending', (tester) async {
+    tester.view.physicalSize = const Size(900, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = FakePatientApi(hasAppointment: false)
+      ..bookingCompleter = Completer<void>();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: BookingPanel(api: api, old: null, onChanged: () {}))));
+    await tester.pump();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clínica geral').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<int>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dra. Ana Souza').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<DateTime>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('/').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(ChoiceChip).first);
+    await tester.pump();
+    final confirm = find.text('Confirmar agendamento');
+    await tester.tap(confirm);
+    await tester.tap(confirm);
+    await tester.pump();
+    expect(api.bookings, 1);
+    expect(find.byType(AppActionButton), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    api.bookingCompleter!.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('erro de conexão permite tentar novamente', (tester) async {

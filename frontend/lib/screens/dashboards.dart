@@ -205,18 +205,29 @@ class _PatientDashboardState extends State<PatientDashboard> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                              child: Text(item.specialty,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800))),
-                          const SizedBox(width: 10),
-                          statusBadge(item.status),
-                        ]),
+                    LayoutBuilder(builder: (context, constraints) {
+                      final title = Text(item.specialty,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800));
+                      if (constraints.maxWidth < 480) {
+                        return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              title,
+                              const SizedBox(height: 10),
+                              statusBadge(item.status)
+                            ]);
+                      }
+                      return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: title),
+                            const SizedBox(width: 10),
+                            statusBadge(item.status),
+                          ]);
+                    }),
                     const SizedBox(height: 16),
                     _appointmentLine(
                         Icons.medical_services_outlined, item.professional),
@@ -255,19 +266,10 @@ class _PatientDashboardState extends State<PatientDashboard> {
               ?.copyWith(fontWeight: FontWeight.w800)),
       const SizedBox(height: 12),
       if (next == null)
-        Card(
-            child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Você não possui consultas agendadas.'),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(
-                          onPressed: () => openBooking(),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Agendar consulta')),
-                    ])))
+        AppEmptyState(
+            message: 'Você não possui consultas agendadas.',
+            actionLabel: 'Agendar consulta',
+            onAction: () => openBooking())
       else
         consultationCard(next),
       const SizedBox(height: 28),
@@ -525,6 +527,26 @@ class _PatientDashboardState extends State<PatientDashboard> {
         Text(message, textAlign: TextAlign.center)
       ]));
 
+  Widget _shellActions() {
+    final book = AppActionButton(
+        label: 'Agendar consulta',
+        icon: Icons.add_circle_outline,
+        onPressed: () => openBooking(),
+        expand: screenClassOf(context) == ScreenClass.compact);
+    final exit = OutlinedButton.icon(
+        onPressed: logout,
+        icon: const Icon(Icons.logout, size: 18),
+        label: const Text('Sair'));
+    if (screenClassOf(context) == ScreenClass.compact) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        book,
+        const SizedBox(height: 8),
+        exit,
+      ]);
+    }
+    return Wrap(spacing: 8, runSpacing: 8, children: [book, exit]);
+  }
+
   Widget _profileField(
           double width, IconData icon, String label, String value) =>
       SizedBox(
@@ -568,136 +590,48 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     ]))
               ])));
 
-  Widget _navButton(int target, IconData icon, String label) {
-    final selected = page == target;
-    final foreground = accessibility.highContrast
-        ? (selected ? Colors.black : Colors.yellow)
-        : (selected ? Colors.white : blue);
-    return Semantics(
-        selected: selected,
-        button: true,
-        label: '$label${selected ? ', página atual' : ''}',
-        child: selected
-            ? FilledButton.icon(
-                onPressed: () => setState(() => page = target),
-                icon: Icon(icon, size: 18, color: foreground),
-                label: Text(label, style: TextStyle(color: foreground)))
-            : OutlinedButton.icon(
-                onPressed: () => setState(() => page = target),
-                icon: Icon(icon, size: 18),
-                label: Text(label)));
-  }
-
-  Widget _patientHeader(double width) {
-    final compact = width < 1250;
+  @override
+  Widget build(BuildContext context) {
     final firstName = summary?.patient.name.split(' ').first ??
         ApiService.session?.name.split(' ').first ??
         '';
-    final nav = Wrap(spacing: 8, runSpacing: 8, children: [
-      _navButton(0, Icons.home_outlined, 'Início'),
-      _navButton(1, Icons.calendar_month_outlined, 'Consultas'),
-      _navButton(2, Icons.timeline, 'Status'),
-    ]);
-    final profile = _navButton(3, Icons.person_outline, 'Perfil');
-    final logoutButton = OutlinedButton.icon(
-        onPressed: logout,
-        icon: const Icon(Icons.logout, size: 18),
-        label: const Text('Sair'));
-    return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-            color: accessibility.highContrast ? Colors.black : Colors.white,
-            border: Border.all(
-                color: accessibility.highContrast
-                    ? Colors.yellow
-                    : const Color(0xFFE1E7ED),
-                width: accessibility.highContrast ? 2 : 1),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: accessibility.highContrast
-                ? null
-                : const [
-                    BoxShadow(
-                        color: Color(0x120D2338),
-                        blurRadius: 18,
-                        offset: Offset(0, 6))
-                  ]),
-        child: compact
-            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  const BrandMark(compact: true),
-                  const Spacer(),
-                  logoutButton,
-                ]),
-                const SizedBox(height: 12),
-                Text('Olá, $firstName!',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                Wrap(spacing: 8, runSpacing: 8, children: [nav, profile])
-              ])
-            : Row(children: [
-                const BrandMark(compact: true),
-                const SizedBox(width: 22),
-                nav,
-                const Spacer(),
-                ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 150),
-                    child: Text('Olá, $firstName!',
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700))),
-                const SizedBox(width: 10),
-                profile,
-                const SizedBox(width: 8),
-                logoutButton,
-              ]));
+    final titles = [
+      'Olá, $firstName!',
+      'Minhas consultas',
+      'Acompanhar status',
+      'Perfil'
+    ];
+    return ResponsiveAppShell(
+        title: titles[page],
+        subtitle: page == 0
+            ? 'Acompanhe sua saúde e seus próximos atendimentos.'
+            : null,
+        destinations: const [
+          AppDestination(icon: Icons.home_outlined, label: 'Início'),
+          AppDestination(
+              icon: Icons.calendar_month_outlined, label: 'Consultas'),
+          AppDestination(icon: Icons.timeline, label: 'Status'),
+          AppDestination(icon: Icons.person_outline, label: 'Perfil'),
+        ],
+        selectedIndex: page,
+        onDestinationSelected: (value) => setState(() => page = value),
+        primaryAction: !loading && summary != null && error == null
+            ? _shellActions()
+            : null,
+        body: loading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null && summary == null
+                ? AppErrorState(message: error!, onAction: load)
+                : SingleChildScrollView(
+                    child: Padding(
+                        padding: const EdgeInsets.only(bottom: 120),
+                        child: switch (page) {
+                          1 => consultationList(),
+                          2 => statusPage(),
+                          3 => profilePage(),
+                          _ => home()
+                        })));
   }
-
-  @override
-  Widget build(BuildContext context) =>
-      AppPage(child: LayoutBuilder(builder: (context, constraints) {
-        return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 76, 16, 0),
-            child: Column(children: [
-              Center(
-                  child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1200),
-                      child: _patientHeader(constraints.maxWidth))),
-              const SizedBox(height: 20),
-              Expanded(
-                  child: Center(
-                      child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1200),
-                          child: loading
-                              ? const Center(child: CircularProgressIndicator())
-                              : error != null && summary == null
-                                  ? Center(
-                                      child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                          Text(error!),
-                                          FilledButton(
-                                              onPressed: load,
-                                              child: const Text(
-                                                  'Tentar novamente'))
-                                        ]))
-                                  : SingleChildScrollView(
-                                      child: Padding(
-                                          padding: const EdgeInsets.only(
-                                              bottom: 150),
-                                          child: switch (page) {
-                                            1 => consultationList(),
-                                            2 => statusPage(),
-                                            3 => profilePage(),
-                                            _ => home()
-                                          }))))),
-            ]));
-      }));
 }
 
 String formatBrazilianPhone(String? value) {
