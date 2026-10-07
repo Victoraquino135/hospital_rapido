@@ -11,6 +11,7 @@ part 'screens/booking.dart';
 part 'config/accessibility.dart';
 part 'config/design_system.dart';
 part 'widgets/app_components.dart';
+part 'widgets/responsive_shell.dart';
 part 'widgets/shared_widgets.dart';
 part 'widgets/password_rules.dart';
 part 'screens/dashboards.dart';

@@ -168,7 +168,11 @@ class AuthLayout extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 560),
               child: Card(
                   child: Padding(
-                      padding: const EdgeInsets.all(30), child: child)))));
+                      padding: EdgeInsets.all(
+                          screenClassOf(context) == ScreenClass.compact
+                              ? 20
+                              : 30),
+                      child: child)))));
 }
 
 class InfoPanel extends StatelessWidget {
