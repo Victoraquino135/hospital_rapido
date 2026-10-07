@@ -57,7 +57,7 @@
 - Testes existentes em `frontend/test/`: adaptar somente expectativas visuais afetadas, preservando expectativas funcionais.
 - `docs/07_testes/testes_e_resultados.md`: registrar a validação final realmente executada.
 
-## Tarefa 1: Fundamentos visuais e componentes compartilhados
+## Task 1: Fundamentos visuais e componentes compartilhados
 
 **Arquivos:**
 - Criar: `frontend/lib/config/design_system.dart`
@@ -111,7 +111,7 @@ git add frontend/lib/main.dart frontend/lib/config/design_system.dart frontend/l
 git commit -m "feat(frontend): adiciona fundamentos visuais responsivos"
 ```
 
-## Tarefa 2: Shell responsivo, marca e acessibilidade global
+## Task 2: Shell responsivo, marca e acessibilidade global
 
 **Arquivos:**
 - Criar: `frontend/lib/widgets/responsive_shell.dart`
@@ -166,7 +166,7 @@ git add frontend/lib/main.dart frontend/lib/widgets/responsive_shell.dart fronte
 git commit -m "feat(frontend): cria shell adaptativo e acessível"
 ```
 
-## Tarefa 3: Acesso, cadastro, verificação e recuperação
+## Task 3: Acesso, cadastro, verificação e recuperação
 
 **Arquivos:**
 - Criar: `frontend/test/auth_responsive_test.dart`
@@ -216,7 +216,7 @@ git add frontend/lib/screens/auth_pages.dart frontend/lib/screens/email_verifica
 git commit -m "feat(frontend): moderniza acesso e recuperação responsivos"
 ```
 
-## Tarefa 4: Paciente, consultas e agendamento
+## Task 4: Paciente, consultas e agendamento
 
 **Arquivos:**
 - Modificar: `frontend/lib/screens/dashboards.dart:3-848`
@@ -267,7 +267,7 @@ git add frontend/lib/screens/dashboards.dart frontend/lib/screens/booking.dart f
 git commit -m "feat(frontend): redesenha jornada responsiva do paciente"
 ```
 
-## Tarefa 5: Recepção, enfermagem e profissional
+## Task 5: Recepção, enfermagem e profissional
 
 **Arquivos:**
 - Modificar: `frontend/lib/screens/staff_dashboard.dart`
@@ -317,7 +317,7 @@ git add frontend/lib/screens/staff_dashboard.dart frontend/test/staff_profiles_t
 git commit -m "feat(frontend): moderniza painéis responsivos da equipe"
 ```
 
-## Tarefa 6: Administração responsiva
+## Task 6: Administração responsiva
 
 **Arquivos:**
 - Modificar: `frontend/lib/screens/admin_dashboard.dart`
@@ -367,7 +367,7 @@ git add frontend/lib/screens/admin_dashboard.dart frontend/test/admin_dashboard_
 git commit -m "feat(frontend): torna administração totalmente responsiva"
 ```
 
-## Tarefa 7: Regressão completa, builds e evidências
+## Task 7: Regressão completa, builds e evidências
 
 **Arquivos:**
 - Modificar somente se os resultados mudarem: `docs/07_testes/testes_e_resultados.md`
