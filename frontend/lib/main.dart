@@ -9,6 +9,8 @@ import 'widgets/brand_mark.dart';
 part 'screens/recovery_email_page.dart';
 part 'screens/booking.dart';
 part 'config/accessibility.dart';
+part 'config/design_system.dart';
+part 'widgets/app_components.dart';
 part 'widgets/shared_widgets.dart';
 part 'widgets/password_rules.dart';
 part 'screens/dashboards.dart';
@@ -71,19 +73,31 @@ class UbsApp extends StatelessWidget {
                         borderRadius: BorderRadius.circular(18))),
                 filledButtonTheme: FilledButtonThemeData(
                     style: FilledButton.styleFrom(
-                        minimumSize: const Size(44, 44),
+                        minimumSize: const Size(
+                            AppSizes.minTouchTarget,
+                            AppSizes.minTouchTarget),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.md),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)))),
                 outlinedButtonTheme: OutlinedButtonThemeData(
                     style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(44, 44),
+                        minimumSize: const Size(
+                            AppSizes.minTouchTarget,
+                            AppSizes.minTouchTarget),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.md),
                         side:
                             BorderSide(color: contrast ? Colors.yellow : blue),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)))),
                 textButtonTheme: TextButtonThemeData(
                     style: TextButton.styleFrom(
-                        minimumSize: const Size(44, 44),
+                        minimumSize: const Size(
+                            AppSizes.minTouchTarget,
+                            AppSizes.minTouchTarget),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)))),
                 textTheme: TextTheme(
