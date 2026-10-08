@@ -87,9 +87,13 @@ class AdminAppointment {
         professionalId = v['professional_id'] as int,
         status = v['status'] as String,
         legalPriority = v['legal_priority'] as String? ?? 'geral',
+        priorityReason =
+            v['priority_reason'] as String? ?? 'Sem prioridade legal',
         risk = v['risk_classification'] as String?,
         riskLabel = v['risk_label'] as String?,
         triageObservation = v['triage_observation'] as String?,
+        triageComplaint = v['triage_complaint'] as String?,
+        vitalSigns = v['vital_signs'] as String?,
         arrivedAt = v['arrived_at'] == null
             ? null
             : DateTime.parse(v['arrived_at'] as String),
@@ -110,14 +114,20 @@ class AdminAppointment {
             : DateTime.parse(v['completed_at'] as String);
   final int id, professionalId;
   final DateTime scheduledAt;
-  final DateTime? arrivedAt, missedAt, triagedAt, calledAt, startedAt, completedAt;
+  final DateTime? arrivedAt,
+      missedAt,
+      triagedAt,
+      calledAt,
+      startedAt,
+      completedAt;
   final String patient,
       patientDocument,
       specialty,
       professional,
       status,
-      legalPriority;
-  final String? risk, riskLabel, triageObservation;
+      legalPriority,
+      priorityReason;
+  final String? risk, riskLabel, triageObservation, triageComplaint, vitalSigns;
 }
 
 class Appointment {

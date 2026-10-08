@@ -38,9 +38,35 @@ class ApiService {
         'document': document.replaceAll(RegExp(r'[.\-\s]'), ''),
         'password': password
       }));
-  Future<void> register(Map<String, dynamic> data) async {
-    await _post('/auth/register', data);
+  Future<Map<String, dynamic>> register(Map<String, dynamic> data) async =>
+      await _post('/auth/register', data);
+
+  Future<void> correctRegistrationEmail(
+      String verificationToken, String newEmail) async {
+    await _post('/auth/email/corrigir', {
+      'verification_token': verificationToken,
+      'new_email': newEmail.trim().toLowerCase(),
+    });
   }
+
+  Future<int> requestEmailVerification(String email) async {
+    final response = await _post(
+        '/auth/email/solicitar-codigo', {'email': email.trim().toLowerCase()});
+    return (response['resend_after_seconds'] as num?)?.toInt() ?? 60;
+  }
+
+  Future<int> resendEmailVerification(String email) async {
+    final response = await _post(
+        '/auth/email/reenviar-codigo', {'email': email.trim().toLowerCase()});
+    return (response['resend_after_seconds'] as num?)?.toInt() ?? 60;
+  }
+
+  Future<String> validateEmailVerification(String email, String code) async =>
+      (await _post('/auth/email/validar-codigo', {
+        'email': email.trim().toLowerCase(),
+        'code': code,
+      }))['message'] as String? ??
+      'E-mail validado com sucesso.';
 
   Future<Map<String, dynamic>> forgotPassword(String email) async =>
       _post('/auth/esqueci-senha', {'email': email.trim().toLowerCase()});
@@ -298,10 +324,13 @@ class ApiService {
       jsonDecode((await _request('GET', '/enfermagem/agendamentos/$id')).body)
           as Map<String, dynamic>;
 
-  Future<void> classifyRisk(int id, String level, String? observation) async {
+  Future<void> classifyRisk(int id, String level, String complaint,
+      String vitalSigns, String? observation) async {
     await _request(
         'PATCH', '/enfermagem/agendamentos/$id/classificacao-risco', {
       'level': level,
+      'complaint': complaint.trim(),
+      'vital_signs': vitalSigns.trim(),
       if (observation?.trim().isNotEmpty ?? false)
         'observation': observation!.trim(),
     });
@@ -318,8 +347,8 @@ class ApiService {
   }
 
   Future<List<AdminAppointment>> professionalQueue([DateTime? day]) async =>
-      _list(await _request('GET',
-              '/profissional/fila?day=${_day(day ?? DateTime.now())}'))
+      _list(await _request(
+              'GET', '/profissional/fila?day=${_day(day ?? DateTime.now())}'))
           .map(AdminAppointment.fromJson)
           .toList();
 
