@@ -336,21 +336,51 @@ class _AdminDashboardState extends State<AdminDashboard> {
               container: true,
               label: 'Registro de auditoria: ${item['action']}',
               child: Card(
-                  child: ListTile(
-                      leading: const Icon(Icons.history),
-                      title:
-                          Text(item['action'].toString().replaceAll('_', ' ')),
-                      subtitle: Text(
-                          '${item['actor']} • ${item['record_type']} #${item['record_id'] ?? '-'}'),
-                      trailing:
-                          Column(mainAxisSize: MainAxisSize.min, children: [
-                        const Text('Registrado',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                        Text(item['created_at']
-                            .toString()
-                            .replaceFirst('T', ' ')
-                            .substring(0, 16))
-                      ]))))
+                  child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        final content = Row(
+                            key: const Key('audit-content'),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.history),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                    Text(item['action']
+                                        .toString()
+                                        .replaceAll('_', ' ')),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                        '${item['actor']} • ${item['record_type']} #${item['record_id'] ?? '-'}')
+                                  ]))
+                            ]);
+                        final metadata = _AuditMetadata(
+                            createdAt: item['created_at'].toString());
+                        final compact = constraints.maxWidth < 620 ||
+                            MediaQuery.textScalerOf(context).scale(16) > 18;
+                        if (compact) {
+                          return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                content,
+                                const SizedBox(height: 12),
+                                Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: metadata)
+                              ]);
+                        }
+                        return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: content),
+                              const SizedBox(width: 20),
+                              metadata
+                            ]);
+                      }))))
       ]);
 
   Widget _settings() => ListView(children: [
@@ -438,6 +468,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
     for (final controller in [name, cpf, email, password, confirmation]) {
       controller.dispose();
     }
+  }
+}
+
+class _AuditMetadata extends StatelessWidget {
+  const _AuditMetadata({required this.createdAt});
+
+  final String createdAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = createdAt.replaceFirst('T', ' ').substring(0, 16);
+    return Column(
+        key: const Key('audit-metadata'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Registrado',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(formatted, style: const TextStyle(fontSize: 16))
+        ]);
   }
 }
 

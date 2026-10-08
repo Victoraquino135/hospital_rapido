@@ -232,6 +232,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('audit_metadata_is_16px_and_wraps_below_on_compact',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester
+        .pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminContentApi())));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico').last);
+    await tester.pumpAndSettle();
+
+    final registered = tester.widget<Text>(find.text('Registrado'));
+    final date = tester.widget<Text>(find.text('2026-10-07 14:30'));
+    expect(registered.style?.fontSize, 16);
+    expect(date.style?.fontSize, 16);
+    expect(find.byKey(const Key('audit-metadata')), findsOneWidget);
+
+    accessibility.setFontScale(1.3);
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    await tester.pumpWidget(
+        UbsApp(home: AdminDashboard(api: FakeAdminContentApi())));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const Key('responsive-compact-destination-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico').last);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Histórico e auditoria'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Registrado'), 120,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.byKey(const Key('audit-metadata')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('audit-metadata'))).dy,
+      greaterThan(tester.getTopLeft(find.byKey(const Key('audit-content'))).dy),
+    );
+  });
+
   testWidgets('painel administrativo mostra resumo real e menu responsivo',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1280, 800));
