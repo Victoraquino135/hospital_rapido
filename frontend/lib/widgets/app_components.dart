@@ -99,6 +99,126 @@ class AppSurfaceCard extends StatelessWidget {
       );
 }
 
+class AvailabilitySlotCard extends StatelessWidget {
+  const AvailabilitySlotCard({
+    super.key,
+    required this.slot,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final Slot slot;
+  final bool selected;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final enabled = slot.selectable && onPressed != null;
+    final label = selected
+        ? 'Selecionado'
+        : slot.selectable
+            ? 'Disponível'
+            : 'Indisponível';
+    final icon = selected
+        ? Icons.check_circle_outline
+        : slot.selectable
+            ? Icons.event_available_outlined
+            : Icons.event_busy_outlined;
+    final accent = selected
+        ? colors.primary
+        : slot.selectable
+            ? colors.tertiary
+            : colors.outline;
+    final borderWidth = accessibility.highContrast || selected ? 2.0 : 1.0;
+    final time =
+        '${slot.scheduledAt.hour.toString().padLeft(2, '0')}:${slot.scheduledAt.minute.toString().padLeft(2, '0')}';
+
+    return Semantics(
+      container: true,
+      button: slot.selectable,
+      enabled: enabled,
+      selected: selected,
+      label: '$time, $label',
+      excludeSemantics: true,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSizes.minTouchTarget),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected && !accessibility.highContrast
+                ? colors.primaryContainer
+                : colors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: accent, width: borderWidth),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: enabled ? onPressed : null,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: accessibility.highContrast ? null : accent),
+                    const SizedBox(width: AppSpacing.sm),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(time,
+                            style: const TextStyle(fontWeight: FontWeight.w800)),
+                        Text(label, style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AvailabilityLegend extends StatelessWidget {
+  const AvailabilityLegend({super.key});
+
+  @override
+  Widget build(BuildContext context) => const Wrap(
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.sm,
+        children: [
+          _AvailabilityLegendItem(
+              icon: Icons.event_available_outlined, label: 'Disponível'),
+          _AvailabilityLegendItem(
+              icon: Icons.event_busy_outlined, label: 'Indisponível'),
+          _AvailabilityLegendItem(
+              icon: Icons.check_circle_outline, label: 'Selecionado'),
+        ],
+      );
+}
+
+class _AvailabilityLegendItem extends StatelessWidget {
+  const _AvailabilityLegendItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: AppSpacing.xs),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      );
+}
+
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     super.key,

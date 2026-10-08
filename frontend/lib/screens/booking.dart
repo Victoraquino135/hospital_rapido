@@ -300,18 +300,20 @@ class _BookingPanelState extends State<BookingPanel> {
                           padding: EdgeInsets.all(12),
                           child: Text('Nenhuma data disponível.')),
                     const SizedBox(height: 12),
-                    if (day != null && times.isNotEmpty)
+                    if (day != null && times.isNotEmpty) ...[
+                      const AvailabilityLegend(),
+                      const SizedBox(height: 10),
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         for (final slot in times)
-                          ChoiceChip(
-                              tooltip: slot.label,
-                              label: Text(
-                                  '${slot.scheduledAt.hour.toString().padLeft(2, '0')}:${slot.scheduledAt.minute.toString().padLeft(2, '0')} — ${slot.label}'),
-                              selected: chosen?.scheduledAt == slot.scheduledAt,
-                              onSelected: saving || !slot.selectable
+                          AvailabilitySlotCard(
+                              slot: slot,
+                              selected:
+                                  chosen?.scheduledAt == slot.scheduledAt,
+                              onPressed: saving || !slot.selectable
                                   ? null
-                                  : (_) => setState(() => chosen = slot)),
+                                  : () => setState(() => chosen = slot)),
                       ]),
+                    ],
                     if (!loading &&
                         day != null &&
                         times.isEmpty &&
@@ -344,6 +346,7 @@ class _BookingPanelState extends State<BookingPanel> {
                       ]),
                     if (chosen != null)
                       Card(
+                          key: const Key('booking-summary'),
                           child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
@@ -352,11 +355,23 @@ class _BookingPanelState extends State<BookingPanel> {
                                     const Text('Resumo',
                                         style: TextStyle(
                                             fontWeight: FontWeight.bold)),
-                                    Text(specialty!),
-                                    Text(professionals.firstWhere(
-                                            (x) => x['id'] == doctor)['name']
-                                        as String),
-                                    Text(showDate(chosen!.scheduledAt)),
+                                    const SizedBox(height: 12),
+                                    _BookingSummaryRow(
+                                        label: 'Especialidade',
+                                        value: specialty!),
+                                    _BookingSummaryRow(
+                                        label: 'Profissional',
+                                        value: professionals.firstWhere(
+                                                (x) => x['id'] == doctor)['name']
+                                            as String),
+                                    _BookingSummaryRow(
+                                        label: 'Data',
+                                        value:
+                                            showOnlyDate(chosen!.scheduledAt)),
+                                    _BookingSummaryRow(
+                                        label: 'Horário',
+                                        value:
+                                            '${chosen!.scheduledAt.hour.toString().padLeft(2, '0')}:${chosen!.scheduledAt.minute.toString().padLeft(2, '0')}'),
                                   ]))),
                   ])),
                   AppActionButton(
@@ -369,4 +384,27 @@ class _BookingPanelState extends State<BookingPanel> {
                       expand: true),
                 ]));
       });
+}
+
+class _BookingSummaryRow extends StatelessWidget {
+  const _BookingSummaryRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 112,
+              child: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            Expanded(child: Text(value)),
+          ],
+        ),
+      );
 }

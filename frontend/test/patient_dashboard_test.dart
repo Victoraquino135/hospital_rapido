@@ -226,10 +226,19 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('/').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(ChoiceChip).first);
+    await tester.tap(find.byType(AvailabilitySlotCard).first);
     await tester.pumpAndSettle();
     expect(api.bookings, 0);
     expect(find.text('Resumo'), findsOneWidget);
+    final summary = find.byKey(const Key('booking-summary'));
+    expect(find.descendant(of: summary, matching: find.text('Especialidade')),
+        findsOneWidget);
+    expect(find.descendant(of: summary, matching: find.text('Profissional')),
+        findsOneWidget);
+    expect(find.descendant(of: summary, matching: find.text('Data')),
+        findsOneWidget);
+    expect(find.descendant(of: summary, matching: find.text('Horário')),
+        findsOneWidget);
     await tester.tap(find.text('Confirmar agendamento'));
     await tester.pumpAndSettle();
     expect(api.bookings, 1);
@@ -260,7 +269,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('/').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(ChoiceChip).first);
+    await tester.tap(find.byType(AvailabilitySlotCard).first);
     await tester.pump();
     final confirm = find.text('Confirmar agendamento');
     await tester.tap(confirm);
