@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ubs_saude/main.dart';
@@ -39,6 +41,13 @@ void main() {
     expect(find.text('Disponível'), findsOneWidget);
     expect(find.byIcon(Icons.event_available_outlined), findsOneWidget);
     expect(tester.getSize(find.byType(InkWell)).height, greaterThanOrEqualTo(48));
+    expect(
+      tester
+          .getSemantics(find.byType(AvailabilitySlotCard))
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
 
     await tester.tap(find.byType(AvailabilitySlotCard));
     expect(taps, 1);
@@ -48,12 +57,20 @@ void main() {
     var taps = 0;
     await pumpCard(
       tester,
-      value: slot(selectable: false, label: 'Indisponível'),
+      value: slot(selectable: false, label: 'Já agendado'),
       onPressed: () => taps++,
     );
 
     expect(find.text('Indisponível'), findsOneWidget);
+    expect(find.text('Já agendado'), findsOneWidget);
     expect(find.byIcon(Icons.event_busy_outlined), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(find.byType(AvailabilitySlotCard))
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isFalse,
+    );
     await tester.tap(find.byType(AvailabilitySlotCard));
     expect(taps, 0);
   });

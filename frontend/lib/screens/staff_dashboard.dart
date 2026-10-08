@@ -39,6 +39,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
   Future<void> load() async {
     if (working) return;
     working = true;
+    if (!loading && mounted) setState(() {});
     try {
       if (isNursing) {
         final result = await Future.wait([
@@ -88,6 +89,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
       search.text.trim().isNotEmpty;
 
   Future<void> _clearFilters() async {
+    if (working) return;
     setState(() {
       specialty = null;
       professionalId = null;
@@ -315,8 +317,9 @@ class _StaffDashboardState extends State<StaffDashboard> {
                                   actionLabel: _hasActiveFilters
                                       ? 'Limpar filtros'
                                       : null,
-                                  onAction:
-                                      _hasActiveFilters ? _clearFilters : null,
+                                  onAction: _hasActiveFilters && !working
+                                      ? _clearFilters
+                                      : null,
                                 )
                               : Column(
                                   children: [
@@ -738,4 +741,3 @@ class _RiskDialogState extends State<_RiskDialog> {
                 child: const Text('Salvar classificação')),
           ]);
 }
-

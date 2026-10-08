@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,6 +37,7 @@ class FakeStaffApi extends ApiService {
   int checkIns = 0;
   int classifications = 0;
   int calls = 0;
+  Completer<void>? nextReceptionRequest;
   DateTime? lastDay;
   String? lastSpecialty, lastStatus, lastRisk, lastPatient;
   int? lastProfessionalId;
@@ -55,11 +58,14 @@ class FakeStaffApi extends ApiService {
           int? professionalId,
           String? status,
           String? patient}) async {
+    final pending = nextReceptionRequest;
+    nextReceptionRequest = null;
     lastDay = day;
     lastSpecialty = specialty;
     lastProfessionalId = professionalId;
     lastStatus = status;
     lastPatient = patient;
+    if (pending != null) await pending.future;
     if (specialty != null ||
         professionalId != null ||
         status != null ||
@@ -217,6 +223,38 @@ void main() {
     expect(api.lastRisk, isNull);
     expect(api.lastPatient, isEmpty);
     expect(showOnlyDate(api.lastDay!), showOnlyDate(originalDay!));
+    expect(find.text('Paciente Fictício'), findsOneWidget);
+  });
+
+  testWidgets('clear_filters_is_disabled_while_request_is_pending',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = FakeStaffApi(false);
+    ApiService.session =
+        const Session('token', 'Recepção Fictícia', 'recepcao', []);
+    await tester.pumpWidget(UbsApp(home: StaffDashboard(api: api)));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('staff-search')), 'Ninguém');
+    await tester.tap(find.byTooltip('Buscar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Limpar filtros'), findsOneWidget);
+
+    final pending = Completer<void>();
+    api.nextReceptionRequest = pending;
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Atualizar'));
+    await tester.pump();
+    expect(find.text('Limpar filtros'), findsNothing);
+
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Limpar filtros'), findsOneWidget);
+    expect(api.lastPatient, 'Ninguém');
+
+    await tester.tap(find.text('Limpar filtros'));
+    await tester.pumpAndSettle();
+    expect(api.lastPatient, isEmpty);
     expect(find.text('Paciente Fictício'), findsOneWidget);
   });
 

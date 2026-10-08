@@ -120,6 +120,12 @@ class AvailabilitySlotCard extends StatelessWidget {
         : slot.selectable
             ? 'Disponível'
             : 'Indisponível';
+    final apiLabel = slot.label.trim();
+    final detail = !selected &&
+            apiLabel.isNotEmpty &&
+            apiLabel.toLowerCase() != label.toLowerCase()
+        ? apiLabel
+        : null;
     final icon = selected
         ? Icons.check_circle_outline
         : slot.selectable
@@ -139,7 +145,8 @@ class AvailabilitySlotCard extends StatelessWidget {
       button: slot.selectable,
       enabled: enabled,
       selected: selected,
-      label: '$time, $label',
+      label: '$time, $label${detail == null ? '' : ', $detail'}',
+      onTap: enabled ? onPressed : null,
       excludeSemantics: true,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: AppSizes.minTouchTarget),
@@ -171,6 +178,9 @@ class AvailabilitySlotCard extends StatelessWidget {
                         Text(time,
                             style: const TextStyle(fontWeight: FontWeight.w800)),
                         Text(label, style: Theme.of(context).textTheme.bodySmall),
+                        if (detail != null)
+                          Text(detail,
+                              style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
                   ],
