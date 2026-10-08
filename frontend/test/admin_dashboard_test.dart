@@ -86,6 +86,47 @@ class FakeAgendaApi extends FakeAdminApi {
       };
 }
 
+class FakeAdminContentApi extends FakeAdminApi {
+  static const longName =
+      'Profissional Administrativa com Nome Muito Longo da Silva';
+  static const longSpecialty =
+      'Clínica integrada da família e comunidade ampliada';
+
+  @override
+  Future<List<InternalUser>> internalUsers(
+          {String? search, String? role, bool? active}) async =>
+      [
+        InternalUser.fromJson({
+          'id': 1,
+          'name': longName,
+          'masked_cpf': '***.***.***-25',
+          'email': 'profissional@example.test',
+          'role': 'profissional',
+          'active': true,
+          'professional_registration': 'CRM 123',
+          'specialty_id': 1,
+          'specialty': longSpecialty,
+          'can_triage': true,
+        })
+      ];
+
+  @override
+  Future<List<Map<String, dynamic>>> adminSpecialties() async => [
+        {'id': 1, 'name': longSpecialty, 'active': true}
+      ];
+
+  @override
+  Future<List<Map<String, dynamic>>> auditHistory() async => [
+        {
+          'action': 'usuario_ativado',
+          'actor': 'Ana Administradora',
+          'record_type': 'usuario',
+          'record_id': 1,
+          'created_at': '2026-10-07T14:30:00'
+        }
+      ];
+}
+
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -99,6 +140,96 @@ void main() {
     ApiService.session = null;
     accessibility.setContrast(false);
     accessibility.setFontScale(1);
+  });
+
+  testWidgets('admin_wide_shows_navigation_and_content_without_overlap',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminApi())));
+    await tester.pumpAndSettle();
+    expect(find.byType(ResponsiveAppShell), findsOneWidget);
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.text('Consultas agendadas'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('admin_compact_shows_one_module_at_a_time', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminApi())));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('responsive-compact-destination-picker')),
+        findsOneWidget);
+    expect(find.text('Consultas agendadas'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('admin_summary_survives_max_text_scale', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    accessibility.setFontScale(1.3);
+    await tester.pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminApi())));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Consultas agendadas'), 180,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.text('Consultas agendadas'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long_internal_user_and_specialty_wrap_without_hiding_actions',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester
+        .pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminContentApi())));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const Key('responsive-compact-destination-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Usuários internos').last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.text(FakeAdminContentApi.longName), 180,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.text(FakeAdminContentApi.longName), findsOneWidget);
+    expect(find.byTooltip('Ações do usuário'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('admin_dialogs_fit_360px', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester
+        .pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminContentApi())));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const Key('responsive-compact-destination-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Usuários internos').last);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull,
+        reason: 'A lista de usuários deve caber antes de abrir o diálogo.');
+    await tester.tap(find.text('Cadastrar usuário'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('audit_status_is_not_color_only', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester
+        .pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminContentApi())));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const Key('responsive-compact-destination-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Registrado'), findsOneWidget);
+    expect(find.text('usuario ativado'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('painel administrativo mostra resumo real e menu responsivo',

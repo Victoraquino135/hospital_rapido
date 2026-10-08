@@ -127,114 +127,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   @override
-  Widget build(BuildContext context) => AppPage(
-          child: SafeArea(child: LayoutBuilder(builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 900;
-        return Padding(
-            padding: const EdgeInsets.fromLTRB(18, 72, 18, 18),
-            child: Column(children: [
-              _header(),
-              const SizedBox(height: 16),
-              if (!wide) _compactMenu(),
-              if (!wide) const SizedBox(height: 12),
-              Expanded(
-                  child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                    if (wide) ...[_sideMenu(), const SizedBox(width: 18)],
-                    Expanded(
-                        child: Card(
-                            child: Padding(
-                                padding: EdgeInsets.all(wide ? 24 : 16),
-                                child: _content())))
-                  ]))
-            ]));
-      })));
-
-  Widget _header() => Card(
-      child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          child: LayoutBuilder(builder: (context, constraints) {
-            final identity = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(ApiService.session?.name ?? 'Administrador',
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w800)),
-                  const Text('Painel Administrativo • Administrador')
-                ]);
-            if (constraints.maxWidth < 620) {
-              return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(children: [
-                      const Expanded(child: BrandMark(compact: true)),
-                      IconButton(
-                          tooltip: 'Atualizar',
-                          onPressed: load,
-                          icon: const Icon(Icons.refresh)),
-                      IconButton(
-                          tooltip: 'Sair',
-                          onPressed: logout,
-                          icon: const Icon(Icons.logout))
-                    ]),
-                    const SizedBox(height: 10),
-                    identity
-                  ]);
-            }
-            return Row(children: [
-              const BrandMark(compact: true),
-              const SizedBox(width: 16),
-              Expanded(child: identity),
-              IconButton(
-                  tooltip: 'Atualizar',
-                  onPressed: load,
-                  icon: const Icon(Icons.refresh)),
-              OutlinedButton.icon(
-                  onPressed: logout,
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Sair')),
-            ]);
-          })));
-
-  Widget _sideMenu() => SizedBox(
-      width: 245,
-      child: Card(
-          child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              children: [
-            for (final item in AdminSection.values)
-              ListTile(
-                  selected: section == item,
-                  leading: Icon(item.icon),
-                  title: Text(item.label),
-                  onTap: () => select(item)),
-            const Divider(),
-            ListTile(
-                leading: const Icon(Icons.logout),
-                title: const Text('Sair'),
-                onTap: logout)
-          ])));
-
-  Widget _compactMenu() => DropdownButtonFormField<AdminSection>(
-      initialValue: section,
-      isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Seção administrativa'),
-      items: [
+  Widget build(BuildContext context) => ResponsiveAppShell(
+      title: 'Painel Administrativo • Administrador',
+      subtitle: ApiService.session?.name ?? 'Administrador',
+      destinations: [
         for (final item in AdminSection.values)
-          DropdownMenuItem(
-              value: item,
-              child: Row(children: [
-                Icon(item.icon),
-                const SizedBox(width: 10),
-                Text(item.label)
-              ]))
+          AppDestination(icon: item.icon, label: item.label)
       ],
-      onChanged: (value) {
-        if (value != null) select(value);
-      });
+      selectedIndex: AdminSection.values.indexOf(section),
+      onDestinationSelected: (index) => select(AdminSection.values[index]),
+      primaryAction: Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton.icon(
+            onPressed: load,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Atualizar')),
+        OutlinedButton.icon(
+            onPressed: logout,
+            icon: const Icon(Icons.logout),
+            label: const Text('Sair')),
+      ]),
+      body: Card(
+          key: const Key('admin-module-content'),
+          child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: _content())));
 
   Widget _content() {
     if (loading) return const Center(child: CircularProgressIndicator());
@@ -265,18 +181,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _title(String title, String subtitle, {Widget? action}) =>
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 25, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text(subtitle)
-        ])),
-        if (action != null) action
-      ]);
+      ResponsivePageHeader(
+          title: title, subtitle: subtitle, primaryAction: action);
 
   Widget _overview() {
     final s = summary!;
@@ -426,16 +332,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
         if (audit.isEmpty)
           const _EmptyState('Nenhuma ação administrativa registrada.'),
         for (final item in audit)
-          Card(
-              child: ListTile(
-                  leading: const Icon(Icons.history),
-                  title: Text(item['action'].toString().replaceAll('_', ' ')),
-                  subtitle: Text(
-                      '${item['actor']} • ${item['record_type']} #${item['record_id'] ?? '-'}'),
-                  trailing: Text(item['created_at']
-                      .toString()
-                      .replaceFirst('T', ' ')
-                      .substring(0, 16))))
+          Semantics(
+              container: true,
+              label: 'Registro de auditoria: ${item['action']}',
+              child: Card(
+                  child: ListTile(
+                      leading: const Icon(Icons.history),
+                      title:
+                          Text(item['action'].toString().replaceAll('_', ' ')),
+                      subtitle: Text(
+                          '${item['actor']} • ${item['record_type']} #${item['record_id'] ?? '-'}'),
+                      trailing:
+                          Column(mainAxisSize: MainAxisSize.min, children: [
+                        const Text('Registrado',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                        Text(item['created_at']
+                            .toString()
+                            .replaceFirst('T', ' ')
+                            .substring(0, 16))
+                      ]))))
       ]);
 
   Widget _settings() => ListView(children: [
@@ -919,26 +834,16 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
 
   @override
   Widget build(BuildContext context) => ListView(children: [
-        Row(children: [
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(
-                    widget.professionalOnly
-                        ? 'Profissionais'
-                        : 'Usuários internos',
-                    style: const TextStyle(
-                        fontSize: 25, fontWeight: FontWeight.w800)),
-                Text(widget.professionalOnly
-                    ? 'Profissionais, especialidades e autorização para triagem.'
-                    : 'Recepcionistas e profissionais. Paciente não é uma opção nesta tela.')
-              ])),
-          FilledButton.icon(
-              onPressed: () => _openForm(),
-              icon: const Icon(Icons.person_add),
-              label: const Text('Cadastrar usuário'))
-        ]),
+        ResponsivePageHeader(
+            title:
+                widget.professionalOnly ? 'Profissionais' : 'Usuários internos',
+            subtitle: widget.professionalOnly
+                ? 'Profissionais, especialidades e autorização para triagem.'
+                : 'Recepcionistas e profissionais. Paciente não é uma opção nesta tela.',
+            primaryAction: AppActionButton(
+                label: 'Cadastrar usuário',
+                icon: Icons.person_add,
+                onPressed: () => _openForm())),
         const SizedBox(height: 16),
         Wrap(spacing: 12, runSpacing: 12, children: [
           SizedBox(
@@ -954,6 +859,7 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
                 width: 190,
                 child: DropdownButtonFormField<String>(
                     initialValue: role,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Perfil'),
                     items: const [
                       DropdownMenuItem(value: null, child: Text('Todos')),
@@ -972,6 +878,7 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
               width: 180,
               child: DropdownButtonFormField<bool>(
                   initialValue: active,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Situação'),
                   items: const [
                     DropdownMenuItem(value: null, child: Text('Todas')),
@@ -989,50 +896,63 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
           const _EmptyState(
               'Nenhum usuário encontrado para os filtros selecionados.'),
         for (final user in users)
-          Card(
-              child: ListTile(
-                  leading: CircleAvatar(
-                      child: Icon(user.role == 'profissional' || user.role == 'enfermagem'
-                          ? Icons.medical_services
-                          : Icons.support_agent)),
-                  title: Text(user.name),
-                  subtitle: Text(
-                      '${user.role == 'profissional' ? 'Profissional' : user.role == 'enfermagem' ? 'Enfermagem' : user.role == 'admin' ? 'Administrador' : 'Recepção'} • ${user.maskedCpf}\n${user.email}${user.specialty == null ? '' : ' • ${user.specialty}'}'),
-                  isThreeLine: true,
-                  trailing: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Tooltip(
-                            message: user.active ? 'Ativo' : 'Inativo',
-                            child: Icon(
-                                user.active ? Icons.check_circle : Icons.block,
-                                color: user.active
-                                    ? green
-                                    : Theme.of(context).colorScheme.error)),
-                        PopupMenuButton<String>(
-                            tooltip: 'Ações do usuário',
-                            onSelected: (action) {
-                              if (action == 'edit') {
-                                _openForm(user);
-                              } else if (action == 'access') {
-                                _resetAccess(user);
-                              } else if (action == 'toggle') {
-                                toggle(user);
-                              }
-                            },
-                            itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Editar dados')),
-                                  const PopupMenuItem(
-                                      value: 'access',
-                                      child: Text('Redefinir acesso')),
-                                  PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Text(
-                                          user.active ? 'Desativar' : 'Ativar'))
-                                ])
-                      ])))
+          Card(child: LayoutBuilder(builder: (context, constraints) {
+            final identity = ListTile(
+                leading: CircleAvatar(
+                    child: Icon(
+                        user.role == 'profissional' || user.role == 'enfermagem'
+                            ? Icons.medical_services
+                            : Icons.support_agent)),
+                title: Text(user.name),
+                subtitle: Text(
+                    '${user.role == 'profissional' ? 'Profissional' : user.role == 'enfermagem' ? 'Enfermagem' : user.role == 'admin' ? 'Administrador' : 'Recepção'} • ${user.maskedCpf}\n${user.email}${user.specialty == null ? '' : ' • ${user.specialty}'}'),
+                isThreeLine: true);
+            final actions = Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(user.active ? Icons.check_circle : Icons.block,
+                  color: user.active
+                      ? green
+                      : Theme.of(context).colorScheme.error),
+              const SizedBox(width: 6),
+              Text(user.active ? 'Ativo' : 'Inativo'),
+              PopupMenuButton<String>(
+                  tooltip: 'Ações do usuário',
+                  onSelected: (action) {
+                    if (action == 'edit') {
+                      _openForm(user);
+                    } else if (action == 'access') {
+                      _resetAccess(user);
+                    } else if (action == 'toggle') {
+                      toggle(user);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                        const PopupMenuItem(
+                            value: 'edit', child: Text('Editar dados')),
+                        const PopupMenuItem(
+                            value: 'access', child: Text('Redefinir acesso')),
+                        PopupMenuItem(
+                            value: 'toggle',
+                            child: Text(user.active ? 'Desativar' : 'Ativar'))
+                      ])
+            ]);
+            if (constraints.maxWidth < 600) {
+              return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    identity,
+                    Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                        child: Align(
+                            alignment: Alignment.centerRight, child: actions))
+                  ]);
+            }
+            return Row(children: [
+              Expanded(child: identity),
+              const SizedBox(width: 8),
+              actions,
+              const SizedBox(width: 8),
+            ]);
+          }))
       ]);
 
   Future<void> _openForm([InternalUser? existing]) async {
@@ -1148,7 +1068,8 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
       'role': role,
       if (role == 'profissional' || role == 'enfermagem')
         'professional_registration': registration.text.trim(),
-      if (role == 'profissional' || role == 'enfermagem') 'specialty_id': specialtyId,
+      if (role == 'profissional' || role == 'enfermagem')
+        'specialty_id': specialtyId,
       if (role == 'enfermagem') 'can_triage': true
     };
     if (widget.existing == null) {
@@ -1183,6 +1104,9 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          actionsOverflowDirection: VerticalDirection.down,
           title: Text(widget.existing == null
               ? 'Cadastrar usuário interno'
               : 'Editar usuário interno'),
@@ -1204,6 +1128,7 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                         validator: emailRule, errorText: errors['email']),
                     DropdownButtonFormField<String>(
                         initialValue: role,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Perfil'),
                         items: const [
                           DropdownMenuItem(
@@ -1212,7 +1137,8 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                               value: 'enfermagem', child: Text('Enfermagem')),
                           DropdownMenuItem(
                               value: 'profissional',
-                              child: Text('Profissional de saúde'))
+                              child: Text('Profissional de saúde',
+                                  overflow: TextOverflow.ellipsis))
                         ],
                         onChanged: (v) => setState(() {
                               role = v!;
@@ -1228,6 +1154,7 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                           errorText: errors['professional_registration']),
                       DropdownButtonFormField<int>(
                           initialValue: specialtyId,
+                          isExpanded: true,
                           decoration: InputDecoration(
                               labelText: 'Especialidade',
                               errorText: errors['specialty_id']),
@@ -1237,14 +1164,16 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                             for (final item in widget.specialties)
                               DropdownMenuItem(
                                   value: item['id'] as int,
-                                  child: Text(item['name'].toString()))
+                                  child: Text(item['name'].toString(),
+                                      overflow: TextOverflow.ellipsis))
                           ],
                           onChanged: (v) => setState(() => specialtyId = v)),
                       if (role == 'enfermagem')
                         const ListTile(
                             leading: Icon(Icons.verified_user_outlined),
                             title: Text('Autorizado a realizar triagem'),
-                            subtitle: Text('Permissão exclusiva do perfil Enfermagem.')),
+                            subtitle: Text(
+                                'Permissão exclusiva do perfil Enfermagem.')),
                     ],
                     if (widget.existing == null) ...[
                       field(password, 'Senha provisória', Icons.lock_outline,
@@ -1264,9 +1193,7 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
             TextButton(
                 onPressed: saving ? null : () => Navigator.pop(context),
                 child: const Text('Cancelar')),
-            FilledButton(
-                onPressed: saving ? null : save,
-                child: Text(saving ? 'Salvando...' : 'Salvar'))
+            AppActionButton(label: 'Salvar', onPressed: save, busy: saving)
           ]);
 }
 

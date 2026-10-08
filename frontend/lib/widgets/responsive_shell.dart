@@ -55,6 +55,7 @@ class ResponsiveAppShell extends StatelessWidget {
                   Expanded(
                     child: NavigationRail(
                       extended: true,
+                      scrollable: true,
                       backgroundColor: Colors.transparent,
                       selectedIndex: selectedIndex,
                       onDestinationSelected: onDestinationSelected,
@@ -77,7 +78,32 @@ class ResponsiveAppShell extends StatelessWidget {
   Widget _compact(BuildContext context) => Column(
         children: [
           Expanded(child: _content(context, showBrand: true)),
-          if (destinations.isNotEmpty)
+          if (destinations.length > 5)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+              child: DropdownButtonFormField<int>(
+                key: const Key('responsive-compact-destination-picker'),
+                initialValue: selectedIndex,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    labelText: 'Seção', prefixIcon: Icon(Icons.menu)),
+                items: [
+                  for (var index = 0; index < destinations.length; index++)
+                    DropdownMenuItem(
+                      value: index,
+                      child: Text(destinations[index].label,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: onDestinationSelected == null
+                    ? null
+                    : (value) {
+                        if (value != null) onDestinationSelected!(value);
+                      },
+              ),
+            )
+          else if (destinations.isNotEmpty)
             NavigationBar(
               height: 72,
               selectedIndex: selectedIndex,
