@@ -11,6 +11,17 @@ class _LoginPageState extends State<LoginPage> {
   final document = TextEditingController(), password = TextEditingController();
   final formKey = GlobalKey<FormState>();
   bool busy = false, hide = true;
+
+  @override
+  void initState() {
+    super.initState();
+    password.addListener(_passwordChanged);
+  }
+
+  void _passwordChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> login() async {
     if (busy) return;
     if (!validateAndFocus(formKey)) {
@@ -33,6 +44,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void dispose() {
     document.dispose();
+    password.removeListener(_passwordChanged);
     password.dispose();
     super.dispose();
   }
@@ -70,6 +82,7 @@ class _LoginPageState extends State<LoginPage> {
                             icon: Icon(hide
                                 ? Icons.visibility_off_outlined
                                 : Icons.visibility_outlined))),
+                    PasswordStrengthIndicator(password: password.text),
                     AppActionButton(
                         label: 'Entrar →',
                         icon: Icons.login,
@@ -118,6 +131,17 @@ class _RegisterPageState extends State<RegisterPage> {
   String relationship = 'Mãe';
   bool busy = false, hide = true, minor = false;
   String priority = 'geral', birthIso = '';
+
+  @override
+  void initState() {
+    super.initState();
+    password.addListener(_passwordChanged);
+  }
+
+  void _passwordChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> chooseBirth() async {
     final picked = await showDatePicker(
         context: context,
@@ -189,6 +213,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   void dispose() {
+    password.removeListener(_passwordChanged);
     for (final c in [
       name,
       cpf,
