@@ -67,23 +67,21 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await pumpShell(tester, 1280);
 
-    final button = find.widgetWithText(
-        FilledButton, 'Preferências de acessibilidade');
+    final button =
+        find.widgetWithText(FilledButton, 'Preferências de acessibilidade');
     expect(button, findsOneWidget);
     final rect = tester.getRect(button);
     expect(rect.right, greaterThan(1000));
     expect(rect.top, lessThan(80));
   });
 
-  testWidgets('shell_keeps_navigation_at_699_700_1099_1100',
-      (tester) async {
+  testWidgets('shell_keeps_navigation_at_699_700_1099_1100', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     for (final width in [699.0, 700.0, 1099.0, 1100.0]) {
       await pumpShell(tester, width);
-      final navigationCount =
-          find.byType(NavigationRail).evaluate().length +
-              find.byType(NavigationBar).evaluate().length;
+      final navigationCount = find.byType(NavigationRail).evaluate().length +
+          find.byType(NavigationBar).evaluate().length;
       expect(navigationCount, 1, reason: 'largura $width');
       expect(find.byType(AccessibilityMenu), findsOneWidget,
           reason: 'largura $width');

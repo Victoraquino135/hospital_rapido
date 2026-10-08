@@ -76,45 +76,25 @@ class UbsApp extends StatelessWidget {
                 filledButtonTheme: FilledButtonThemeData(
                     style: FilledButton.styleFrom(
                         minimumSize: const Size(
-                            AppSizes.minTouchTarget,
-                            AppSizes.minTouchTarget),
+                            AppSizes.minTouchTarget, AppSizes.minTouchTarget),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg,
-                            vertical: AppSpacing.md),
+                            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)))),
                 outlinedButtonTheme: OutlinedButtonThemeData(
                     style: OutlinedButton.styleFrom(
                         minimumSize: const Size(
-                            AppSizes.minTouchTarget,
-                            AppSizes.minTouchTarget),
+                            AppSizes.minTouchTarget, AppSizes.minTouchTarget),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg,
-                            vertical: AppSpacing.md),
+                            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
                         side:
                             BorderSide(color: contrast ? Colors.yellow : blue),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)))),
-                textButtonTheme: TextButtonThemeData(
-                    style: TextButton.styleFrom(
-                        minimumSize: const Size(
-                            AppSizes.minTouchTarget,
-                            AppSizes.minTouchTarget),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)))),
-                textTheme: TextTheme(
-                    bodyLarge: TextStyle(color: fg),
-                    bodyMedium: TextStyle(color: fg),
-                    titleLarge: TextStyle(color: fg),
-                    titleMedium: TextStyle(color: fg)),
-                inputDecorationTheme: InputDecorationTheme(
-                    filled: true,
-                    fillColor: contrast ? Colors.black : Colors.white,
-                    labelStyle: TextStyle(color: fg),
-                    hintStyle:
-                        TextStyle(color: contrast ? Colors.white : Colors.grey),
-                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: contrast ? Colors.yellow : Colors.grey, width: contrast ? 3 : 1)),
-                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: contrast ? Colors.white : blue, width: 3))),
+                textButtonTheme:
+                    TextButtonThemeData(style: TextButton.styleFrom(minimumSize: const Size(AppSizes.minTouchTarget, AppSizes.minTouchTarget), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))),
+                textTheme: TextTheme(bodyLarge: TextStyle(color: fg), bodyMedium: TextStyle(color: fg), titleLarge: TextStyle(color: fg), titleMedium: TextStyle(color: fg)),
+                inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: contrast ? Colors.black : Colors.white, labelStyle: TextStyle(color: fg), hintStyle: TextStyle(color: contrast ? Colors.white : Colors.grey), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: contrast ? Colors.yellow : Colors.grey, width: contrast ? 3 : 1)), focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: contrast ? Colors.white : blue, width: 3))),
                 snackBarTheme: contrast ? const SnackBarThemeData(backgroundColor: Colors.yellow, contentTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700), actionTextColor: Colors.black) : const SnackBarThemeData(),
                 navigationBarTheme: contrast ? const NavigationBarThemeData(backgroundColor: Colors.black, indicatorColor: Colors.yellow, iconTheme: WidgetStatePropertyAll(IconThemeData(color: Colors.white)), labelTextStyle: WidgetStatePropertyAll(TextStyle(color: Colors.white))) : const NavigationBarThemeData()),
             builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(accessibility.fontSizeScale)), child: child ?? const SizedBox.shrink()),

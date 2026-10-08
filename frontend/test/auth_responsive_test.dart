@@ -50,8 +50,7 @@ void main() {
     }
   });
 
-  testWidgets('registration_wraps_at_360_with_max_text_scale',
-      (tester) async {
+  testWidgets('registration_wraps_at_360_with_max_text_scale', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await setViewport(tester, const Size(360, 800));
