@@ -602,6 +602,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       'Perfil'
     ];
     return ResponsiveAppShell(
+        wideNavigationMode: WideNavigationMode.overlayDrawer,
         title: titles[page],
         subtitle: page == 0
             ? 'Acompanhe sua saúde e seus próximos atendimentos.'

@@ -238,6 +238,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
             ? 'Painel do Profissional de Saúde'
             : 'Painel da Recepção';
     return ResponsiveAppShell(
+        wideNavigationMode: WideNavigationMode.contentOnly,
         title: title,
         subtitle: ApiService.session?.name,
         primaryAction: Wrap(spacing: 8, runSpacing: 8, children: [

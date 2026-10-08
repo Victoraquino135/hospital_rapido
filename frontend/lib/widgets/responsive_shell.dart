@@ -7,6 +7,8 @@ class AppDestination {
   final String label;
 }
 
+enum WideNavigationMode { persistentRail, overlayDrawer, contentOnly }
+
 class ResponsiveAppShell extends StatelessWidget {
   const ResponsiveAppShell({
     super.key,
@@ -17,6 +19,7 @@ class ResponsiveAppShell extends StatelessWidget {
     this.selectedIndex = 0,
     this.onDestinationSelected,
     this.primaryAction,
+    this.wideNavigationMode = WideNavigationMode.persistentRail,
   });
 
   final Widget body;
@@ -26,6 +29,7 @@ class ResponsiveAppShell extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int>? onDestinationSelected;
   final Widget? primaryAction;
+  final WideNavigationMode wideNavigationMode;
 
   @override
   Widget build(BuildContext context) => AppPage(
@@ -37,7 +41,17 @@ class ResponsiveAppShell extends StatelessWidget {
         }),
       );
 
-  Widget _wide(BuildContext context) => Row(
+  Widget _wide(BuildContext context) {
+    final mode = destinations.isEmpty
+        ? WideNavigationMode.contentOnly
+        : wideNavigationMode;
+    if (mode == WideNavigationMode.overlayDrawer) {
+      return _content(context, showBrand: true, showMenuButton: true);
+    }
+    if (mode == WideNavigationMode.contentOnly) {
+      return _content(context, showBrand: true);
+    }
+    return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
@@ -74,6 +88,80 @@ class ResponsiveAppShell extends StatelessWidget {
           Expanded(child: _content(context, showBrand: false)),
         ],
       );
+  }
+
+  Future<void> _showWideNavigation(BuildContext context) async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Fechar menu de navegação',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 180),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(-1, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+        child: child,
+      ),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) => Align(
+        alignment: Alignment.centerLeft,
+        child: Material(
+          key: const Key('wide-navigation-panel'),
+          elevation: 12,
+          color: accessibility.highContrast
+              ? Colors.black
+              : Theme.of(context).colorScheme.surface,
+          child: SafeArea(
+            child: SizedBox(
+              width: 320,
+              height: double.infinity,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(child: BrandMark(compact: true)),
+                        IconButton(
+                          tooltip: 'Fechar menu',
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: destinations.length,
+                        itemBuilder: (context, index) {
+                          final destination = destinations[index];
+                          return ListTile(
+                            minTileHeight: AppSizes.minTouchTarget,
+                            selected: index == selectedIndex,
+                            leading: Icon(destination.icon),
+                            title: Text(destination.label),
+                            onTap: onDestinationSelected == null
+                                ? null
+                                : () {
+                                    Navigator.pop(dialogContext);
+                                    onDestinationSelected!(index);
+                                  },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _compact(BuildContext context) => Column(
         children: [
@@ -119,7 +207,9 @@ class ResponsiveAppShell extends StatelessWidget {
         ],
       );
 
-  Widget _content(BuildContext context, {required bool showBrand}) => Center(
+  Widget _content(BuildContext context,
+          {required bool showBrand, bool showMenuButton = false}) =>
+      Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: AppSizes.contentMaxWidth),
           child: Padding(
@@ -129,9 +219,16 @@ class ResponsiveAppShell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (showBrand) ...[
-                  const Align(
-                      alignment: Alignment.centerLeft,
-                      child: BrandMark(compact: true)),
+                  Row(children: [
+                    const Expanded(child: BrandMark(compact: true)),
+                    if (showMenuButton)
+                      IconButton.filledTonal(
+                        key: const Key('wide-navigation-menu-button'),
+                        tooltip: 'Abrir menu de navegação',
+                        onPressed: () => _showWideNavigation(context),
+                        icon: const Icon(Icons.menu),
+                      ),
+                  ]),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 ResponsivePageHeader(

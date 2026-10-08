@@ -104,6 +104,8 @@ void main() {
         .pumpWidget(MaterialApp(home: PatientDashboard(api: FakePatientApi())));
     await tester.pump();
     expect(find.byType(ResponsiveAppShell), findsOneWidget);
+    expect(find.byKey(const Key('wide-navigation-menu-button')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Próxima consulta'), findsOneWidget);
     expect(find.text('Agendar consulta'), findsWidgets);
     expect(tester.takeException(), isNull);

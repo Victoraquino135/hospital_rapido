@@ -152,6 +152,7 @@ void main() {
         .pumpWidget(UbsApp(home: StaffDashboard(api: FakeStaffApi(false))));
     await tester.pumpAndSettle();
     expect(find.byType(ResponsiveAppShell), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
     expect(find.byKey(const Key('staff-filter-region')), findsOneWidget);
     expect(find.byKey(const Key('staff-results-region')), findsOneWidget);
     expect(tester.takeException(), isNull);
