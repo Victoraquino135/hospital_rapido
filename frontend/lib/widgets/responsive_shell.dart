@@ -135,42 +135,43 @@ class ResponsivePageHeader extends StatelessWidget {
   final Widget? primaryAction;
 
   @override
-  Widget build(BuildContext context) {
-    final text = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800)),
-        if (subtitle != null) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(subtitle!, style: Theme.of(context).textTheme.bodyLarge),
-        ],
-      ],
-    );
-    if (screenClassOf(context) == ScreenClass.compact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          text,
-          if (primaryAction != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            primaryAction!,
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final text = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            if (subtitle != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(subtitle!, style: Theme.of(context).textTheme.bodyLarge),
+            ],
           ],
-        ],
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(child: text),
-        if (primaryAction != null) ...[
-          const SizedBox(width: AppSpacing.lg),
-          primaryAction!,
-        ],
-      ],
-    );
-  }
+        );
+        if (constraints.maxWidth < AppBreakpoints.compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              text,
+              if (primaryAction != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                primaryAction!,
+              ],
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: text),
+            if (primaryAction != null) ...[
+              const SizedBox(width: AppSpacing.lg),
+              primaryAction!,
+            ],
+          ],
+        );
+      });
 }

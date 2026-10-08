@@ -52,7 +52,8 @@ class _StaffDashboardState extends State<StaffDashboard> {
         items = await api.professionalQueue(day);
         summary = {
           'awaiting': items.where((item) => item.status == 'em_triagem').length,
-          'in_care': items.where((item) => item.status == 'em_atendimento').length,
+          'in_care':
+              items.where((item) => item.status == 'em_atendimento').length,
         };
       } else {
         final result = await Future.wait([
@@ -153,11 +154,17 @@ class _StaffDashboardState extends State<StaffDashboard> {
                         Text(
                             'Horário: ${showDate(DateTime.parse(value['scheduled_at']))}'),
                         Text('Status: ${statusLabel(value['status'])}'),
+                        Text(
+                            'Prioridade: ${value['priority_reason'] ?? 'Sem prioridade legal'}'),
                         if (value['arrived_at'] != null)
                           Text(
                               'Chegada: ${showDate(DateTime.parse(value['arrived_at']))}'),
                         if (value['risk_label'] != null)
                           Text('Risco: ${value['risk_label']}'),
+                        if (value['triage_complaint'] != null)
+                          Text('Queixa: ${value['triage_complaint']}'),
+                        if (value['vital_signs'] != null)
+                          Text('Sinais vitais: ${value['vital_signs']}'),
                         if (value['triage_observation'] != null)
                           Text('Observação: ${value['triage_observation']}'),
                       ])),
@@ -195,7 +202,9 @@ class _StaffDashboardState extends State<StaffDashboard> {
     if (value == null) {
       return;
     }
-    await _run(() => api.classifyRisk(item.id, value[0]!, value[1]),
+    await _run(
+        () => api.classifyRisk(
+            item.id, value[0]!, value[1]!, value[2]!, value[3]),
         'Classificação de risco registrada.');
   }
 
@@ -222,69 +231,72 @@ class _StaffDashboardState extends State<StaffDashboard> {
   }
 
   @override
-  Widget build(BuildContext context) => AppPage(
-      child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 74, 20, 20),
-          child: Center(
-              child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1250),
-                  child: Column(children: [
-                    _header(),
-                    const SizedBox(height: 12),
-                    Expanded(
-                        child: loading
-                            ? const Center(child: CircularProgressIndicator())
-                            : RefreshIndicator(
-                                onRefresh: load,
-                                child: ListView(children: [
-                                  if (isNursing) ...[
-                                    const Card(
-                                        child: ListTile(
-                                            leading: Icon(Icons.info_outline),
-                                            title: Text('Simulação acadêmica'),
-                                            subtitle: Text(
-                                                'A classificação de risco é manual, deve ser feita somente por profissional autorizado e não substitui uma avaliação real.'))),
-                                    const SizedBox(height: 12),
+  Widget build(BuildContext context) {
+    final title = isNursing
+        ? 'Painel da Enfermagem'
+        : isProfessional
+            ? 'Painel do Profissional de Saúde'
+            : 'Painel da Recepção';
+    return ResponsiveAppShell(
+        title: title,
+        subtitle: ApiService.session?.name,
+        primaryAction: Wrap(spacing: 8, runSpacing: 8, children: [
+          OutlinedButton.icon(
+              onPressed: working ? null : load,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Atualizar')),
+          OutlinedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Sair')),
+        ]),
+        body: loading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: load,
+                child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(children: [
+                      if (isNursing) ...[
+                        const AppSurfaceCard(
+                            child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Icon(Icons.info_outline),
+                              SizedBox(width: 12),
+                              Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                    Text('Simulação acadêmica',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w800)),
+                                    SizedBox(height: 4),
+                                    Text(
+                                        'A classificação de risco é manual, deve ser feita somente por profissional autorizado e não substitui uma avaliação real.')
+                                  ]))
+                            ])),
+                        const SizedBox(height: 12),
+                      ],
+                      _summaryCards(),
+                      const SizedBox(height: 12),
+                      _filters(),
+                      const SizedBox(height: 12),
+                      Semantics(
+                          key: const Key('staff-results-region'),
+                          container: true,
+                          label: 'Resultados dos atendimentos',
+                          child: items.isEmpty
+                              ? const _StaffEmpty()
+                              : Column(
+                                  children: [
+                                    for (final item in items) _itemCard(item)
                                   ],
-                                  _summaryCards(),
-                                  const SizedBox(height: 12),
-                                  _filters(),
-                                  const SizedBox(height: 12),
-                                  if (items.isEmpty)
-                                    const _StaffEmpty()
-                                  else
-                                    for (final item in items) _itemCard(item),
-                                ])))
-                  ])))));
-
-  Widget _header() => Card(
-      child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            const BrandMark(compact: true),
-            const SizedBox(width: 14),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(ApiService.session?.name ?? '',
-                      style: const TextStyle(
-                          fontSize: 21, fontWeight: FontWeight.w800)),
-                  Text(isNursing
-                      ? 'Painel da Enfermagem'
-                      : isProfessional
-                          ? 'Painel do Profissional de Saúde'
-                          : 'Painel da Recepção')
-                ])),
-            IconButton(
-                tooltip: 'Atualizar',
-                onPressed: working ? null : load,
-                icon: const Icon(Icons.refresh)),
-            IconButton(
-                tooltip: 'Sair',
-                onPressed: _logout,
-                icon: const Icon(Icons.logout)),
-          ])));
+                                )),
+                      const SizedBox(height: 100),
+                    ]))));
+  }
 
   Widget _summaryCards() {
     final cards = isNursing
@@ -309,24 +321,36 @@ class _StaffDashboardState extends State<StaffDashboard> {
           ]
         : isProfessional
             ? <(String, int, IconData)>[
-                ('Encaminhados', summary['awaiting'] ?? 0, Icons.campaign_outlined),
-                ('Em atendimento', summary['in_care'] ?? 0, Icons.medical_services_outlined),
+                (
+                  'Encaminhados',
+                  summary['awaiting'] ?? 0,
+                  Icons.campaign_outlined
+                ),
+                (
+                  'Em atendimento',
+                  summary['in_care'] ?? 0,
+                  Icons.medical_services_outlined
+                ),
               ]
             : <(String, int, IconData)>[
-            ('Agendadas', summary['scheduled'] ?? 0, Icons.event_outlined),
-            ('Check-in', summary['checked_in'] ?? 0, Icons.how_to_reg),
-            (
-              'Em atendimento',
-              summary['in_care'] ?? 0,
-              Icons.medical_services_outlined
-            ),
-            ('Concluídas', summary['completed'] ?? 0, Icons.task_alt_outlined),
-            (
-              'Não compareceu',
-              summary['absent'] ?? 0,
-              Icons.person_off_outlined
-            ),
-          ];
+                ('Agendadas', summary['scheduled'] ?? 0, Icons.event_outlined),
+                ('Check-in', summary['checked_in'] ?? 0, Icons.how_to_reg),
+                (
+                  'Em atendimento',
+                  summary['in_care'] ?? 0,
+                  Icons.medical_services_outlined
+                ),
+                (
+                  'Concluídas',
+                  summary['completed'] ?? 0,
+                  Icons.task_alt_outlined
+                ),
+                (
+                  'Não compareceu',
+                  summary['absent'] ?? 0,
+                  Icons.person_off_outlined
+                ),
+              ];
     return LayoutBuilder(builder: (_, constraints) {
       final width = constraints.maxWidth < 620
           ? constraints.maxWidth
@@ -356,79 +380,92 @@ class _StaffDashboardState extends State<StaffDashboard> {
     });
   }
 
-  Widget _filters() => Card(
-      child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Wrap(spacing: 12, runSpacing: 12, children: [
-            OutlinedButton.icon(
-                onPressed: _chooseDay,
-                icon: const Icon(Icons.calendar_today),
-                label: Text(showOnlyDate(day))),
-            if (isReception)
-              SizedBox(
-                  width: 250,
-                  child: TextField(
-                      key: const Key('staff-search'),
-                      controller: search,
-                      onSubmitted: (_) => load(),
-                      decoration: InputDecoration(
-                          labelText: 'Buscar nome ou CPF',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: IconButton(
-                              tooltip: 'Buscar',
-                              onPressed: load,
-                              icon: const Icon(Icons.arrow_forward))))),
-            _dropdown('Especialidade', specialty,
-                specialties.map((x) => (x, x)).toList(), (value) {
-              setState(() => specialty = value);
-              load();
-            }),
-            if (isReception)
-              _dropdown(
-                  'Profissional',
-                  professionalId?.toString(),
-                  professionals.entries
-                      .map((x) => (x.key.toString(), x.value))
-                      .toList(), (value) {
-                setState(() => professionalId = int.tryParse(value ?? ''));
-                load();
-              }),
+  Widget _filters() => LayoutBuilder(builder: (context, constraints) {
+        final controls = Wrap(spacing: 12, runSpacing: 12, children: [
+          OutlinedButton.icon(
+              onPressed: _chooseDay,
+              icon: const Icon(Icons.calendar_today),
+              label: Text(showOnlyDate(day))),
+          if (isReception)
+            SizedBox(
+                width: 250,
+                child: TextField(
+                    key: const Key('staff-search'),
+                    controller: search,
+                    onSubmitted: (_) => load(),
+                    decoration: InputDecoration(
+                        labelText: 'Buscar nome ou CPF',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: IconButton(
+                            tooltip: 'Buscar',
+                            onPressed: load,
+                            icon: const Icon(Icons.arrow_forward))))),
+          _dropdown('Especialidade', specialty,
+              specialties.map((x) => (x, x)).toList(), (value) {
+            setState(() => specialty = value);
+            load();
+          }),
+          if (isReception)
             _dropdown(
-                'Status',
-                status,
-                ((isNursing || isProfessional)
-                        ? const {
-                            'em_espera': 'Aguardando triagem',
-                            'em_triagem': 'Em triagem',
-                            'em_atendimento': 'Em atendimento',
-                            'concluido': 'Concluída',
-                          }
-                        : const {
-                            'agendado': 'Agendada',
-                            'em_espera': 'Check-in realizado',
-                            'em_triagem': 'Em triagem',
-                            'em_atendimento': 'Em atendimento',
-                            'concluido': 'Concluída',
-                            'falta': 'Não compareceu',
-                            'cancelado': 'Cancelada',
-                          })
-                    .entries
-                    .map((x) => (x.key, x.value))
+                'Profissional',
+                professionalId?.toString(),
+                professionals.entries
+                    .map((x) => (x.key.toString(), x.value))
                     .toList(), (value) {
-              setState(() => status = value);
+              setState(() => professionalId = int.tryParse(value ?? ''));
               load();
             }),
-            if (isNursing)
-              _dropdown('Classificação de risco', risk, const [
-                ('muito_alto', 'Muito alto'),
-                ('alto', 'Alto'),
-                ('medio', 'Médio'),
-                ('baixo', 'Baixo'),
-              ], (value) {
-                setState(() => risk = value);
-                load();
-              }),
-          ])));
+          _dropdown(
+              'Status',
+              status,
+              ((isNursing || isProfessional)
+                      ? const {
+                          'em_espera': 'Aguardando triagem',
+                          'em_triagem': 'Em triagem',
+                          'em_atendimento': 'Em atendimento',
+                          'concluido': 'Concluída',
+                        }
+                      : const {
+                          'agendado': 'Agendada',
+                          'em_espera': 'Check-in realizado',
+                          'em_triagem': 'Em triagem',
+                          'em_atendimento': 'Em atendimento',
+                          'concluido': 'Concluída',
+                          'falta': 'Não compareceu',
+                          'cancelado': 'Cancelada',
+                        })
+                  .entries
+                  .map((x) => (x.key, x.value))
+                  .toList(), (value) {
+            setState(() => status = value);
+            load();
+          }),
+          if (isNursing)
+            _dropdown('Classificação de risco', risk, const [
+              ('muito_alto', 'Muito alto'),
+              ('alto', 'Alto'),
+              ('medio', 'Médio'),
+              ('baixo', 'Baixo'),
+            ], (value) {
+              setState(() => risk = value);
+              load();
+            }),
+        ]);
+        if (constraints.maxWidth < 600) {
+          return Card(
+              key: const Key('staff-compact-filters'),
+              child: ExpansionTile(
+                  leading: const Icon(Icons.filter_alt_outlined),
+                  title: const Text('Filtros'),
+                  childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  children: [controls]));
+        }
+        return Semantics(
+            key: const Key('staff-filter-region'),
+            container: true,
+            label: 'Filtros de atendimentos',
+            child: AppSurfaceCard(child: controls));
+      });
 
   Widget _dropdown(String label, String? value, List<(String, String)> values,
           ValueChanged<String?> changed) =>
@@ -467,12 +504,36 @@ class _StaffDashboardState extends State<StaffDashboard> {
                           '${showDate(item.scheduledAt)} • ${statusLabel(item.status)}'),
                       if (item.arrivedAt != null)
                         Text('Chegada: ${showDate(item.arrivedAt!)}'),
+                      Text('Prioridade: ${item.priorityReason}',
+                          style: TextStyle(
+                              fontWeight: item.legalPriority == 'geral'
+                                  ? FontWeight.normal
+                                  : FontWeight.w700,
+                              color: item.legalPriority == 'geral'
+                                  ? null
+                                  : green)),
                       if (item.riskLabel != null)
-                        Text('Risco: ${item.riskLabel}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
+                        Semantics(
+                            label: 'Nível de risco: ${item.riskLabel}',
+                            child: Row(children: [
+                              const Icon(Icons.flag_outlined, size: 18),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                  child: Text('Risco: ${item.riskLabel}',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)))
+                            ])),
                       if (item.triageObservation?.isNotEmpty ?? false)
                         Text('Observação: ${item.triageObservation}'),
+                      if (item.triageComplaint?.isNotEmpty ?? false)
+                        Text('Queixa: ${item.triageComplaint}'),
+                      if (item.vitalSigns?.isNotEmpty ?? false)
+                        Text('Sinais vitais: ${item.vitalSigns}'),
+                      if (isProfessional) ...[
+                        const SizedBox(height: 8),
+                        const Text('1. Chamar  2. Iniciar  3. Concluir',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ],
                     ]);
                 final actions = Wrap(spacing: 8, runSpacing: 8, children: [
                   OutlinedButton.icon(
@@ -480,10 +541,10 @@ class _StaffDashboardState extends State<StaffDashboard> {
                       icon: const Icon(Icons.visibility_outlined),
                       label: const Text('Detalhes')),
                   if (isReception && item.status == 'agendado')
-                    FilledButton.icon(
+                    AppActionButton(
                         onPressed: working ? null : () => _checkIn(item),
-                        icon: const Icon(Icons.how_to_reg),
-                        label: const Text('Check-in')),
+                        icon: Icons.how_to_reg,
+                        label: 'Check-in'),
                   if (isReception &&
                       const {'agendado', 'em_espera'}.contains(item.status))
                     OutlinedButton.icon(
@@ -492,12 +553,12 @@ class _StaffDashboardState extends State<StaffDashboard> {
                         label: const Text('Não compareceu')),
                   if (isNursing &&
                       const {'em_espera', 'em_triagem'}.contains(item.status))
-                    FilledButton.icon(
+                    AppActionButton(
                         onPressed: working ? null : () => _classify(item),
-                        icon: const Icon(Icons.flag_outlined),
-                        label: Text(item.status == 'em_triagem'
+                        icon: Icons.flag_outlined,
+                        label: item.status == 'em_triagem'
                             ? 'Reclassificar risco'
-                            : 'Classificar risco')),
+                            : 'Classificar risco'),
                   if (isProfessional && item.status == 'em_triagem')
                     OutlinedButton.icon(
                         onPressed: working ? null : () => _call(item),
@@ -506,15 +567,15 @@ class _StaffDashboardState extends State<StaffDashboard> {
                             ? 'Chamar paciente'
                             : 'Chamar novamente')),
                   if (isProfessional && item.status == 'em_triagem')
-                    FilledButton.icon(
+                    AppActionButton(
                         onPressed: working ? null : () => _start(item),
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Iniciar atendimento')),
+                        icon: Icons.play_arrow,
+                        label: 'Iniciar atendimento'),
                   if (isProfessional && item.status == 'em_atendimento')
-                    FilledButton.icon(
+                    AppActionButton(
                         onPressed: working ? null : () => _complete(item),
-                        icon: const Icon(Icons.task_alt),
-                        label: const Text('Concluir atendimento')),
+                        icon: Icons.task_alt,
+                        label: 'Concluir atendimento'),
                 ]);
                 return constraints.maxWidth < 760
                     ? Column(
@@ -545,49 +606,98 @@ class _RiskDialog extends StatefulWidget {
 }
 
 class _RiskDialogState extends State<_RiskDialog> {
+  final formKey = GlobalKey<FormState>();
+  final complaint = TextEditingController();
+  final vitalSigns = TextEditingController();
   final observation = TextEditingController();
   String level = 'baixo';
 
   @override
   void dispose() {
+    complaint.dispose();
+    vitalSigns.dispose();
     observation.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          actionsOverflowDirection: VerticalDirection.down,
           title: const Text('Classificação de risco manual'),
           content: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-            DropdownButtonFormField<String>(
-                initialValue: level,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Nível de risco'),
-                items: const [
-                  DropdownMenuItem(
-                      value: 'muito_alto', child: Text('Muito alto')),
-                  DropdownMenuItem(value: 'alto', child: Text('Alto')),
-                  DropdownMenuItem(value: 'medio', child: Text('Médio')),
-                  DropdownMenuItem(value: 'baixo', child: Text('Baixo')),
-                ],
-                onChanged: (value) => level = value ?? level),
-            const SizedBox(height: 12),
-            TextField(
-                controller: observation,
-                maxLength: 500,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                    labelText: 'Observação curta (opcional)',
-                    hintText: 'Registre somente a observação necessária.')),
-          ])),
+              child: Form(
+                  key: formKey,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    DropdownButtonFormField<String>(
+                        initialValue: level,
+                        isExpanded: true,
+                        decoration:
+                            const InputDecoration(labelText: 'Nível de risco'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'muito_alto', child: Text('Muito alto')),
+                          DropdownMenuItem(value: 'alto', child: Text('Alto')),
+                          DropdownMenuItem(
+                              value: 'medio', child: Text('Médio')),
+                          DropdownMenuItem(
+                              value: 'baixo', child: Text('Baixo')),
+                        ],
+                        onChanged: (value) => level = value ?? level),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                        key: const Key('triage-complaint'),
+                        controller: complaint,
+                        maxLength: 500,
+                        minLines: 2,
+                        maxLines: 4,
+                        validator: (value) => (value ?? '').trim().length < 3
+                            ? 'Informe a queixa principal.'
+                            : null,
+                        decoration: const InputDecoration(
+                            labelText: 'Queixa principal',
+                            hintText:
+                                'Relato fictício apresentado pelo paciente.')),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                        key: const Key('triage-vital-signs'),
+                        controller: vitalSigns,
+                        maxLength: 500,
+                        minLines: 2,
+                        maxLines: 4,
+                        validator: (value) => (value ?? '').trim().length < 3
+                            ? 'Informe os sinais vitais aferidos.'
+                            : null,
+                        decoration: const InputDecoration(
+                            labelText: 'Sinais vitais aferidos',
+                            hintText:
+                                'Ex.: PA e temperatura fictícias para demonstração.')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: observation,
+                        maxLength: 500,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                            labelText: 'Observação curta (opcional)',
+                            hintText:
+                                'Registre somente a observação necessária.')),
+                  ]))),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancelar')),
             FilledButton(
-                onPressed: () => Navigator.pop(
-                    context, <String?>[level, observation.text.trim()]),
+                onPressed: () {
+                  if (!(formKey.currentState?.validate() ?? false)) return;
+                  Navigator.pop(context, <String?>[
+                    level,
+                    complaint.text.trim(),
+                    vitalSigns.text.trim(),
+                    observation.text.trim()
+                  ]);
+                },
                 child: const Text('Salvar classificação')),
           ]);
 }

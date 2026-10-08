@@ -6,19 +6,22 @@ import 'package:ubs_saude/models/api_models.dart';
 import 'package:ubs_saude/services/api_service.dart';
 
 AdminAppointment fakeAppointment(String status,
-        {String? risk, String? riskLabel}) =>
+        {String? risk,
+        String? riskLabel,
+        String patient = 'Paciente Fictício'}) =>
     AdminAppointment.fromJson({
       'id': 22,
       'scheduled_at': DateTime.now()
           .copyWith(hour: 10, minute: 0, second: 0, millisecond: 0)
           .toIso8601String(),
-      'patient': 'Paciente Fictício',
+      'patient': patient,
       'patient_document': '***.***.***-25',
       'specialty': 'Clínica Geral',
       'professional': 'Profissional Fictício',
       'professional_id': 2,
       'status': status,
       'legal_priority': 'geral',
+      'priority_reason': 'Sem prioridade legal',
       'risk_classification': risk,
       'risk_label': riskLabel,
       'arrived_at':
@@ -26,8 +29,9 @@ AdminAppointment fakeAppointment(String status,
     });
 
 class FakeStaffApi extends ApiService {
-  FakeStaffApi(this.professional);
+  FakeStaffApi(this.professional, {this.patientName = 'Paciente Fictício'});
   final bool professional;
+  final String patientName;
   int checkIns = 0;
   int classifications = 0;
   int calls = 0;
@@ -48,7 +52,7 @@ class FakeStaffApi extends ApiService {
           int? professionalId,
           String? status,
           String? patient}) async =>
-      [fakeAppointment('agendado')];
+      [fakeAppointment('agendado', patient: patientName)];
 
   @override
   Future<Map<String, dynamic>> nursingSummary([DateTime? day]) async => {
@@ -69,11 +73,16 @@ class FakeStaffApi extends ApiService {
           String? specialty,
           String? status,
           String? risk}) async =>
-      [fakeAppointment('em_espera')];
+      [
+        fakeAppointment('em_espera',
+            risk: 'baixo', riskLabel: 'Baixo', patient: patientName)
+      ];
 
   @override
-  Future<List<AdminAppointment>> professionalQueue([DateTime? day]) async =>
-      [fakeAppointment('em_triagem', risk: 'baixo', riskLabel: 'Baixo')];
+  Future<List<AdminAppointment>> professionalQueue([DateTime? day]) async => [
+        fakeAppointment('em_triagem',
+            risk: 'baixo', riskLabel: 'Baixo', patient: patientName)
+      ];
 
   @override
   Future<void> receptionCheckIn(int id) async {
@@ -84,7 +93,8 @@ class FakeStaffApi extends ApiService {
   Future<void> receptionAbsence(int id) async {}
 
   @override
-  Future<void> classifyRisk(int id, String level, String? observation) async {
+  Future<void> classifyRisk(int id, String level, String complaint,
+      String vitalSigns, String? observation) async {
     classifications++;
   }
 
@@ -131,6 +141,96 @@ void main() {
     ApiService.session = null;
     accessibility.setContrast(false);
     accessibility.setFontScale(1);
+  });
+
+  testWidgets('reception_wide_uses_filter_and_results_regions', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1366, 850));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    ApiService.session =
+        const Session('token', 'Recepção Fictícia', 'recepcao', []);
+    await tester
+        .pumpWidget(UbsApp(home: StaffDashboard(api: FakeStaffApi(false))));
+    await tester.pumpAndSettle();
+    expect(find.byType(ResponsiveAppShell), findsOneWidget);
+    expect(find.byKey(const Key('staff-filter-region')), findsOneWidget);
+    expect(find.byKey(const Key('staff-results-region')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reception_compact_collapses_filters_without_hiding_checkin',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    ApiService.session =
+        const Session('token', 'Recepção Fictícia', 'recepcao', []);
+    await tester
+        .pumpWidget(UbsApp(home: StaffDashboard(api: FakeStaffApi(false))));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('staff-compact-filters')), findsOneWidget);
+    expect(find.text('Check-in'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long_patient_name_does_not_hide_actions', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const longName =
+        'Paciente com nome muito longo da Silva Albuquerque e Nascimento';
+    ApiService.session =
+        const Session('token', 'Recepção Fictícia', 'recepcao', []);
+    await tester.pumpWidget(UbsApp(
+        home: StaffDashboard(api: FakeStaffApi(false, patientName: longName))));
+    await tester.pumpAndSettle();
+    expect(find.text(longName), findsOneWidget);
+    expect(find.text('Check-in'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('risk_level_has_text_and_semantics_in_high_contrast',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    accessibility.setContrast(true);
+    ApiService.session = const Session(
+        'token', 'Enfermagem Fictícia', 'enfermagem', ['triage:write']);
+    await tester
+        .pumpWidget(UbsApp(home: StaffDashboard(api: FakeStaffApi(true))));
+    await tester.pumpAndSettle();
+    expect(find.text('Risco baixo'), findsWidgets);
+    expect(
+        find.byWidgetPredicate((widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'Nível de risco: Baixo'),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('clinical_queue_survives_max_text_scale_at_360', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    accessibility.setFontScale(1.3);
+    ApiService.session = const Session(
+        'token', 'Enfermagem Fictícia', 'enfermagem', ['triage:write']);
+    await tester
+        .pumpWidget(UbsApp(home: StaffDashboard(api: FakeStaffApi(true))));
+    await tester.pumpAndSettle();
+    expect(find.text('Classificar risco'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('professional_actions_remain_in_workflow_order', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    ApiService.session = const Session(
+        'token', 'Profissional Fictício', 'profissional', ['care:update']);
+    await tester
+        .pumpWidget(UbsApp(home: StaffDashboard(api: FakeStaffApi(true))));
+    await tester.pumpAndSettle();
+    expect(find.text('1. Chamar  2. Iniciar  3. Concluir'), findsOneWidget);
+    final callY = tester.getTopLeft(find.text('Chamar paciente')).dy;
+    final startY = tester.getTopLeft(find.text('Iniciar atendimento')).dy;
+    expect(callY, lessThanOrEqualTo(startY));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('recepção mostra resumo, filtros e ações próprias',
@@ -186,10 +286,15 @@ void main() {
     expect(find.text('Alto'), findsOneWidget);
     expect(find.text('Médio'), findsOneWidget);
     expect(find.text('Baixo'), findsWidgets);
-    expect(find.textContaining('Sinais vitais'), findsNothing);
+    expect(find.text('Queixa principal'), findsOneWidget);
+    expect(find.text('Sinais vitais aferidos'), findsOneWidget);
     expect(find.textContaining('Diagnóstico'), findsNothing);
     await tester.tap(find.text('Baixo').last);
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('triage-complaint')), 'Queixa fictícia.');
+    await tester.enterText(
+        find.byKey(const Key('triage-vital-signs')), 'PA fictícia 120/80.');
     await tester.tap(find.text('Salvar classificação'));
     await tester.pumpAndSettle();
     expect(api.classifications, 1);
