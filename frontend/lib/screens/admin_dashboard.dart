@@ -727,8 +727,13 @@ class _AgendaAdminViewState extends State<_AgendaAdminView> {
                                   const TextStyle(fontWeight: FontWeight.w800)),
                           Text(
                               '${item.patientDocument} • ${item.specialty} • ${item.professional}'),
-                          Text(
-                              'Status: ${statusLabel(item.status)} • Prioridade: ${item.legalPriority}')
+                          Text('Prioridade: ${item.legalPriority}'),
+                          const SizedBox(height: 6),
+                          AppStatusBadge(
+                              label: 'Status: ${statusLabel(item.status)}',
+                              tone: statusToneFor(item.status),
+                              semanticLabel:
+                                  'Situação: ${statusLabel(item.status)}')
                         ]);
                     final action = Wrap(spacing: 8, runSpacing: 8, children: [
                       OutlinedButton.icon(

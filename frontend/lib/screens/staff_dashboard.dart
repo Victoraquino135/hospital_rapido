@@ -80,6 +80,24 @@ class _StaffDashboardState extends State<StaffDashboard> {
     }
   }
 
+  bool get _hasActiveFilters =>
+      specialty != null ||
+      professionalId != null ||
+      status != null ||
+      risk != null ||
+      search.text.trim().isNotEmpty;
+
+  Future<void> _clearFilters() async {
+    setState(() {
+      specialty = null;
+      professionalId = null;
+      status = null;
+      risk = null;
+      search.clear();
+    });
+    await load();
+  }
+
   Future<void> _run(Future<void> Function() action, String success) async {
     if (working) return;
     setState(() => working = true);
@@ -289,7 +307,17 @@ class _StaffDashboardState extends State<StaffDashboard> {
                           container: true,
                           label: 'Resultados dos atendimentos',
                           child: items.isEmpty
-                              ? const _StaffEmpty()
+                              ? AppEmptyState(
+                                  icon: Icons.filter_alt_off_outlined,
+                                  title: 'Nenhum atendimento encontrado',
+                                  message:
+                                      'Não há atendimentos para os filtros selecionados.',
+                                  actionLabel: _hasActiveFilters
+                                      ? 'Limpar filtros'
+                                      : null,
+                                  onAction:
+                                      _hasActiveFilters ? _clearFilters : null,
+                                )
                               : Column(
                                   children: [
                                     for (final item in items) _itemCard(item)
@@ -405,7 +433,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
               specialties.map((x) => (x, x)).toList(), (value) {
             setState(() => specialty = value);
             load();
-          }),
+          }, key: const Key('staff-filter-specialty')),
           if (isReception)
             _dropdown(
                 'Profissional',
@@ -415,7 +443,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
                     .toList(), (value) {
               setState(() => professionalId = int.tryParse(value ?? ''));
               load();
-            }),
+            }, key: const Key('staff-filter-professional')),
           _dropdown(
               'Status',
               status,
@@ -440,7 +468,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
                   .toList(), (value) {
             setState(() => status = value);
             load();
-          }),
+          }, key: const Key('staff-filter-status')),
           if (isNursing)
             _dropdown('Classificação de risco', risk, const [
               ('muito_alto', 'Muito alto'),
@@ -450,7 +478,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
             ], (value) {
               setState(() => risk = value);
               load();
-            }),
+            }, key: const Key('staff-filter-risk')),
         ]);
         if (constraints.maxWidth < 600) {
           return Card(
@@ -469,10 +497,12 @@ class _StaffDashboardState extends State<StaffDashboard> {
       });
 
   Widget _dropdown(String label, String? value, List<(String, String)> values,
-          ValueChanged<String?> changed) =>
+          ValueChanged<String?> changed,
+          {Key? key}) =>
       SizedBox(
           width: 210,
           child: DropdownButtonFormField<String>(
+              key: key,
               initialValue: value,
               isExpanded: true,
               decoration: InputDecoration(labelText: label),
@@ -501,8 +531,14 @@ class _StaffDashboardState extends State<StaffDashboard> {
                               fontSize: 17, fontWeight: FontWeight.w800)),
                       Text(
                           '${item.patientDocument} • ${item.specialty} • ${item.professional}'),
-                      Text(
-                          '${showDate(item.scheduledAt)} • ${statusLabel(item.status)}'),
+                      Wrap(spacing: 8, runSpacing: 6, children: [
+                        Text(showDate(item.scheduledAt)),
+                        AppStatusBadge(
+                            label: statusLabel(item.status),
+                            tone: statusToneFor(item.status),
+                            semanticLabel:
+                                'Situação: ${statusLabel(item.status)}'),
+                      ]),
                       if (item.arrivedAt != null)
                         Text('Chegada: ${showDate(item.arrivedAt!)}'),
                       Text('Prioridade: ${item.priorityReason}',
@@ -703,12 +739,3 @@ class _RiskDialogState extends State<_RiskDialog> {
           ]);
 }
 
-class _StaffEmpty extends StatelessWidget {
-  const _StaffEmpty();
-
-  @override
-  Widget build(BuildContext context) => const Padding(
-      padding: EdgeInsets.symmetric(vertical: 48),
-      child: Center(
-          child: Text('Nenhum atendimento encontrado para os filtros.')));
-}

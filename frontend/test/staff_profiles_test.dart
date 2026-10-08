@@ -35,6 +35,9 @@ class FakeStaffApi extends ApiService {
   int checkIns = 0;
   int classifications = 0;
   int calls = 0;
+  DateTime? lastDay;
+  String? lastSpecialty, lastStatus, lastRisk, lastPatient;
+  int? lastProfessionalId;
 
   @override
   Future<Map<String, dynamic>> receptionSummary([DateTime? day]) async => {
@@ -51,8 +54,20 @@ class FakeStaffApi extends ApiService {
           String? specialty,
           int? professionalId,
           String? status,
-          String? patient}) async =>
-      [fakeAppointment('agendado', patient: patientName)];
+          String? patient}) async {
+    lastDay = day;
+    lastSpecialty = specialty;
+    lastProfessionalId = professionalId;
+    lastStatus = status;
+    lastPatient = patient;
+    if (specialty != null ||
+        professionalId != null ||
+        status != null ||
+        (patient?.isNotEmpty ?? false)) {
+      return [];
+    }
+    return [fakeAppointment('agendado', patient: patientName)];
+  }
 
   @override
   Future<Map<String, dynamic>> nursingSummary([DateTime? day]) async => {
@@ -72,11 +87,17 @@ class FakeStaffApi extends ApiService {
           {DateTime? day,
           String? specialty,
           String? status,
-          String? risk}) async =>
-      [
-        fakeAppointment('em_espera',
-            risk: 'baixo', riskLabel: 'Baixo', patient: patientName)
-      ];
+          String? risk}) async {
+    lastDay = day;
+    lastSpecialty = specialty;
+    lastStatus = status;
+    lastRisk = risk;
+    if (specialty != null || status != null || risk != null) return [];
+    return [
+      fakeAppointment('em_espera',
+          risk: 'baixo', riskLabel: 'Baixo', patient: patientName)
+    ];
+  }
 
   @override
   Future<List<AdminAppointment>> professionalQueue([DateTime? day]) async => [
@@ -170,6 +191,56 @@ void main() {
     expect(find.byKey(const Key('staff-compact-filters')), findsOneWidget);
     expect(find.text('Check-in'), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty_reception_can_clear_filters_without_changing_day',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = FakeStaffApi(false);
+    ApiService.session =
+        const Session('token', 'Recepção Fictícia', 'recepcao', []);
+    await tester.pumpWidget(UbsApp(home: StaffDashboard(api: api)));
+    await tester.pumpAndSettle();
+    final originalDay = api.lastDay;
+
+    await tester.enterText(find.byKey(const Key('staff-search')), 'Ninguém');
+    await tester.tap(find.byTooltip('Buscar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nenhum atendimento encontrado'), findsOneWidget);
+    await tester.tap(find.text('Limpar filtros'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastSpecialty, isNull);
+    expect(api.lastProfessionalId, isNull);
+    expect(api.lastStatus, isNull);
+    expect(api.lastRisk, isNull);
+    expect(api.lastPatient, isEmpty);
+    expect(showOnlyDate(api.lastDay!), showOnlyDate(originalDay!));
+    expect(find.text('Paciente Fictício'), findsOneWidget);
+  });
+
+  testWidgets('empty_nursing_can_clear_status_and_risk', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = FakeStaffApi(true);
+    ApiService.session = const Session(
+        'token', 'Enfermagem Fictícia', 'enfermagem', ['triage:write']);
+    await tester.pumpWidget(UbsApp(home: StaffDashboard(api: api)));
+    await tester.pumpAndSettle();
+    final originalDay = api.lastDay;
+
+    await tester.tap(find.byKey(const Key('staff-filter-risk')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alto').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Nenhum atendimento encontrado'), findsOneWidget);
+    await tester.tap(find.text('Limpar filtros'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastStatus, isNull);
+    expect(api.lastRisk, isNull);
+    expect(showOnlyDate(api.lastDay!), showOnlyDate(originalDay!));
   });
 
   testWidgets('long_patient_name_does_not_hide_actions', (tester) async {

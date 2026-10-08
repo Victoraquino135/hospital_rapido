@@ -43,6 +43,7 @@ void main() {
     await tester.pumpWidget(const UbsApp(
       home: Scaffold(
         body: AppEmptyState(
+          title: 'Sem consultas',
           message:
               'Nenhuma consulta encontrada para este período. Escolha outro dia ou faça um novo agendamento.',
         ),
@@ -51,6 +52,44 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.textContaining('Nenhuma consulta encontrada'), findsOneWidget);
+  });
+
+  testWidgets('empty_state_exposes_optional_action', (tester) async {
+    var actions = 0;
+    await tester.pumpWidget(UbsApp(
+      home: Scaffold(
+        body: AppEmptyState(
+          icon: Icons.filter_alt_off_outlined,
+          title: 'Nenhum resultado',
+          message: 'Revise os filtros selecionados.',
+          actionLabel: 'Limpar filtros',
+          onAction: () => actions++,
+        ),
+      ),
+    ));
+
+    expect(find.text('Nenhum resultado'), findsOneWidget);
+    await tester.tap(find.text('Limpar filtros'));
+    expect(actions, 1);
+  });
+
+  testWidgets('status_badge_has_text_semantics_and_contrast', (tester) async {
+    final semantics = tester.ensureSemantics();
+    accessibility.setContrast(true);
+    addTearDown(() => accessibility.setContrast(false));
+    await tester.pumpWidget(const UbsApp(
+      home: Scaffold(
+        body: AppStatusBadge(
+          label: 'Em atendimento',
+          tone: StatusTone.info,
+          semanticLabel: 'Situação: Em atendimento',
+        ),
+      ),
+    ));
+
+    expect(find.text('Em atendimento'), findsOneWidget);
+    expect(find.bySemanticsLabel('Situação: Em atendimento'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('high_contrast_surface_uses_border_and_text_label',

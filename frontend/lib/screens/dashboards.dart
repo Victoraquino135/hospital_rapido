@@ -267,6 +267,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       const SizedBox(height: 12),
       if (next == null)
         AppEmptyState(
+            title: 'Nenhuma consulta agendada',
             message: 'Você não possui consultas agendadas.',
             actionLabel: 'Agendar consulta',
             onAction: () => openBooking())

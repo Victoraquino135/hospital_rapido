@@ -283,6 +283,7 @@ void main() {
     await tester.tap(find.text('Agenda do dia'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    expect(find.byType(AppStatusBadge), findsOneWidget);
     await tester.tap(find.text('Ver detalhes'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

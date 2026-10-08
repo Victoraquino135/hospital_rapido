@@ -222,12 +222,14 @@ class _AvailabilityLegendItem extends StatelessWidget {
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     super.key,
+    required this.title,
     required this.message,
     this.icon = Icons.event_available_outlined,
     this.actionLabel,
     this.onAction,
   });
 
+  final String title;
   final String message;
   final IconData icon;
   final String? actionLabel;
@@ -236,11 +238,86 @@ class AppEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _AppFeedbackState(
         icon: icon,
-        title: 'Tudo certo por aqui',
+        title: title,
         message: message,
         actionLabel: actionLabel,
         onAction: onAction,
       );
+}
+
+enum StatusTone { neutral, info, success, warning, danger }
+
+StatusTone statusToneFor(String status) => switch (status) {
+      'concluido' => StatusTone.success,
+      'cancelado' || 'falta' => StatusTone.danger,
+      'em_atendimento' || 'em_triagem' => StatusTone.info,
+      'em_espera' => StatusTone.warning,
+      _ => StatusTone.neutral,
+    };
+
+class AppStatusBadge extends StatelessWidget {
+  const AppStatusBadge({
+    super.key,
+    required this.label,
+    required this.tone,
+    this.semanticLabel,
+  });
+
+  final String label;
+  final StatusTone tone;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final (background, foreground, icon) = switch (tone) {
+      StatusTone.info =>
+        (colors.primaryContainer, colors.onPrimaryContainer, Icons.info_outline),
+      StatusTone.success => (const Color(0xFFDFF4E8), const Color(0xFF155D36),
+          Icons.check_circle_outline),
+      StatusTone.warning => (const Color(0xFFFFF0C7), const Color(0xFF6D4C00),
+          Icons.schedule_outlined),
+      StatusTone.danger =>
+        (colors.errorContainer, colors.onErrorContainer, Icons.error_outline),
+      StatusTone.neutral =>
+        (colors.surfaceContainerHighest, colors.onSurface, Icons.event_outlined),
+    };
+    final effectiveBackground =
+        accessibility.highContrast ? Colors.black : background;
+    final effectiveForeground =
+        accessibility.highContrast ? Colors.yellow : foreground;
+
+    return Semantics(
+      container: true,
+      label: semanticLabel ?? label,
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: effectiveBackground,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+              color: effectiveForeground,
+              width: accessibility.highContrast ? 2 : 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: effectiveForeground),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(label,
+                    style: TextStyle(
+                        color: effectiveForeground,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class AppErrorState extends StatelessWidget {
