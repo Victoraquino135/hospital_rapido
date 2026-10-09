@@ -1,99 +1,95 @@
 # UBS Rápida
 
-MVP acadêmico para reduzir filas presenciais de agendamento em Unidades Básicas de Saúde. O sistema reúne cadastro e acesso por CPF, agendamento, acompanhamento do atendimento e painéis operacionais por perfil.
+Sistema acadêmico (MVP) criado para reduzir filas presenciais de agendamento em Unidades Básicas de Saúde. A aplicação oferece login único por CPF e senha, identifica o perfil no backend e abre automaticamente o painel correspondente.
 
-Todos os dados usados na demonstração devem ser fictícios. O projeto não é um sistema de produção e não substitui os sistemas oficiais de saúde.
+Todos os dados de demonstração são fictícios. O projeto não substitui sistemas oficiais de saúde e não é um prontuário eletrônico.
+
+- **Repositório:** https://github.com/Victoraquino135/hospital_rapido
+- **Versão final revisada:** 09/10/2026
+- **Protótipo externo:** nenhum link de protótipo foi localizado no projeto; a implementação Flutter é a referência visual atual.
 
 ## Tecnologias
 
-- Flutter para as interfaces Windows e Web;
-- FastAPI e Python no backend;
-- SQLAlchemy com SQLite persistente;
-- autenticação JWT e senhas protegidas com BCrypt;
-- Pytest e Flutter Test para testes automatizados.
-
-## Estrutura principal
-
-- `backend/app/`: API, regras de negócio, modelos, rotas e segurança;
-- `backend/seed_demonstracao.py`: seed fictício e idempotente;
-- `backend/tests/`: testes automatizados do servidor;
-- `frontend/lib/`: interface Flutter;
-- `frontend/test/`: testes da interface;
-- `docs/documentacao_projeto/`: documentação funcional e histórico acadêmico;
-- `docs/banco_de_dados/`: explicação do SQLite e dos relacionamentos;
-- `docs/evidencias_testes/`: resultados de validação;
-- `docs/ROTEIRO_DEMONSTRACAO.md`: roteiro completo para apresentação;
-- `INICIAR_TUDO.bat`: inicialização completa no Windows;
-- `ATUALIZAR_E_INICIAR_TUDO.bat`: recompila a interface e inicia todo o sistema.
-
-## Como executar no Windows
-
-1. Instale Python 3 e Flutter com suporte a aplicações Windows.
-2. Execute `INICIAR_TUDO.bat` na raiz do projeto.
-3. Aguarde a preparação do ambiente, do banco e da interface.
-4. Use os acessos fictícios apresentados no terminal do iniciador.
-
-O iniciador localiza a pasta do projeto, prepara o ambiente virtual, cria apenas as contas fictícias que estiverem faltando, inicia o backend e abre o Flutter. Contas já existentes não são modificadas.
-
-Depois de alterações no código, use `ATUALIZAR_E_INICIAR_TUDO.bat` para forçar uma nova compilação do Flutter antes da abertura. Os dois atalhos preservam o SQLite existente.
-
-Com o backend ativo, a documentação Swagger fica disponível em `http://127.0.0.1:8000/docs`.
+- **Frontend:** Flutter (Windows e Web);
+- **Backend:** FastAPI / Python;
+- **Banco:** SQLite com SQLAlchemy;
+- **Autenticação:** JWT e senhas protegidas com BCrypt;
+- **Testes:** Pytest, Flutter Test e Flutter Analyze.
 
 ## Perfis
 
-- **Paciente:** cadastro público, consulta de horários, agendamento e acompanhamento;
-- **Recepção:** check-in e acompanhamento da fila;
-- **Enfermagem:** pacientes com check-in e classificação manual de risco;
-- **Profissional de saúde:** chamada, início e conclusão dos atendimentos atribuídos;
-- **Administrador:** usuários internos, especialidades, agendas e auditoria.
+- Paciente;
+- Recepção;
+- Enfermagem;
+- Médico;
+- Administrador.
 
-O login público usa somente CPF e senha e direciona automaticamente para o painel correspondente. O cadastro público cria exclusivamente pacientes.
+Não há seletores públicos de perfil. Após a autenticação, o backend informa o perfil e o Flutter redireciona o usuário.
+
+O fluxo presencial é `Recepção/check-in → Enfermagem/triagem → Médico → Concluída`. O Médico acessa somente pacientes atribuídos a ele com triagem concluída, registra um resumo simples e não possui acesso administrativo, à triagem ou ao cadastro de vagas.
 
 ## Contas fictícias de demonstração
 
 | Perfil | CPF | Senha |
-|---|---|---|
+| --- | --- | --- |
 | Administrador | `12345678909` | `Admin@123` |
 | Recepção | `98765432100` | `Recepcao@123` |
-| Enfermagem | `39053344705` | `Enfermagem@123` |
-| Profissional — Clínica Geral | `11144477735` | `Profissional@123` |
-| Profissional — Pediatria | `16899535009` | `Pediatria@123` |
+| Enfermagem | `45678912364` | `Enfermagem@123` |
+| Médico | `39053344705` | `Medico@123` |
 | Paciente | `52998224725` | `Paciente@123` |
 
-Essas credenciais são exclusivas para demonstração acadêmica e não devem ser reutilizadas em ambientes reais.
+Todos os nomes e dados dessas contas são fictícios e destinados somente à demonstração acadêmica.
 
-## Funcionalidades do MVP
+## Como executar
 
-- cadastro e autenticação de pacientes;
-- recuperação e alteração de senha;
-- controle de acesso por perfil;
-- gestão de profissionais, especialidades e agendas;
-- agendamento, cancelamento e reagendamento;
-- check-in, fila, triagem e conclusão do atendimento;
-- acessibilidade com fonte ampliada e alto contraste;
-- documentação interativa da API.
+Pré-requisitos no Windows: Python 3 e Flutter com suporte a desktop Windows. O iniciador cria o ambiente virtual do backend e instala as dependências quando necessário.
 
-## Roteiro curto de demonstração
+No Windows, execute o único iniciador oficial na raiz:
 
-1. Entre como paciente e agende uma consulta em Clínica Geral ou Pediatria.
-2. Mostre o reagendamento e o cancelamento com liberação da vaga.
-3. Entre como recepção e confirme o check-in.
-4. Entre como enfermagem e registre uma classificação fictícia de risco.
-5. Entre como o profissional atribuído, chame o paciente, inicie e conclua o atendimento.
-6. Retorne ao paciente e confirme o status atualizado.
-7. Mostre no painel administrativo usuários, especialidades, profissionais e horários.
+```text
+INICIAR_TUDO.bat
+```
 
-O roteiro detalhado e os pontos para prints estão em [docs/ROTEIRO_DEMONSTRACAO.md](docs/ROTEIRO_DEMONSTRACAO.md).
+O iniciador localiza o projeto, usa ou cria `backend\venv`, valida a configuração, garante de forma idempotente as contas fictícias que estiverem ausentes, inicia a API e abre o Flutter para Windows. O conteúdo do frontend é verificado por SHA-256; quando houver mudança, o aplicativo Windows será recompilado automaticamente. O banco existente não é recriado nem apagado.
 
-## Fora do escopo
+Para abrir no navegador, use `INICIAR_TUDO.bat -Dispositivo chrome` ou `INICIAR_TUDO.bat -Dispositivo edge`.
 
-Não fazem parte deste MVP: medicamentos, vacinação, pagamentos, telemedicina, prontuário completo, integrações reais com SUS ou e-SUS, WhatsApp, SMS e inteligência artificial para triagem.
+Para forçar a restauração das dependências e a recompilação da interface:
 
-## Banco de dados e privacidade
+```powershell
+.\INICIAR_TUDO.bat -AtualizarTudo
+```
 
-O arquivo usado localmente é `backend/ubs_rapida.db`. Ele não é versionado porque a cópia de desenvolvimento pode conter cadastros locais que não devem ser publicados. Em uma nova instalação, o próprio iniciador cria a estrutura e os perfis fictícios necessários.
+A API e o Swagger ficam disponíveis em:
 
-As senhas são armazenadas somente como hashes BCrypt. Não publique `backend/.env`, tokens, credenciais SMTP ou cópias locais do SQLite. Consulte [a documentação do banco](docs/banco_de_dados/README.md).
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Estrutura
+
+- `frontend/`: interface Flutter, assets e testes de widgets;
+- `backend/`: API FastAPI, regras de negócio, persistência SQLite e testes;
+- `backend/ubs_rapida.db`: banco local preservado e ignorado pelo Git;
+- `docs/`: visão do projeto, perfis, telas, fluxos, banco, API, testes e roteiro;
+- `scripts/`: implementação interna do iniciador oficial;
+- `tests/`: validações do iniciador e da estrutura na raiz;
+- `INICIAR_TUDO.bat`: iniciador oficial;
+- `scripts/iniciar.ps1` e `backend/iniciar_backend.ps1`: scripts internos usados pelo iniciador.
+
+Consulte o [índice da documentação](docs/README.md) e a [estrutura detalhada](docs/ESTRUTURA_DO_PROJETO.md).
+
+## Segurança e configuração local
+
+Copie `backend/.env.example` para `backend/.env` quando precisar configurar SMTP. O `.env`, bancos locais, ambientes virtuais, caches e builds são ignorados pelo Git. Nunca publique senha SMTP, `JWT_SECRET_KEY`, tokens, hashes ou bancos com dados locais.
+
+O cadastro público cria somente pacientes e permite o primeiro login imediatamente. As rotas auxiliares de confirmação de e-mail permanecem disponíveis, mas não bloqueiam o cadastro atual. Contas internas são gerenciadas pelo administrador. A recuperação de senha usa código temporário de uso único armazenado somente como hash e exige SMTP configurado para entrega real.
+
+## Escopo do MVP
+
+O sistema implementa cadastro, autenticação, agendamento, cancelamento, reagendamento, check-in, fila, classificação manual de risco, atendimento Médico com resumo simples, administração de usuários internos e Médicos, especialidades e grades.
+
+Não fazem parte do escopo: prontuário completo, medicamentos, vacinação, exames, telemedicina, pagamentos, integrações SUS/e-SUS, WhatsApp, SMS, IA clínica ou painel público/TV. O painel público é melhoria futura, não requisito do MVP entregue.
 
 ## Testes
 
@@ -101,7 +97,7 @@ Backend:
 
 ```powershell
 cd backend
-.\.venv-integracao\Scripts\python.exe -m pytest -q
+.\venv\Scripts\python.exe -m pytest -q
 ```
 
 Frontend:
@@ -112,18 +108,8 @@ flutter test
 flutter analyze
 ```
 
-Os resultados da validação desta entrega estão em [docs/evidencias_testes](docs/evidencias_testes/README.md).
-
-Na validação de 4 de outubro de 2026 foram aprovados 76 testes do backend e 31 testes Flutter; `flutter analyze` não encontrou problemas.
-
-## Documentação adicional
-
-- [Backend](backend/README.md)
-- [Frontend](frontend/README.md)
-- [Documentação do projeto](docs/documentacao_projeto/)
-- [Banco de dados](docs/banco_de_dados/README.md)
-- [Roteiro de demonstração](docs/ROTEIRO_DEMONSTRACAO.md)
+Os resultados da última execução estão em [docs/07_testes/testes_e_resultados.md](docs/07_testes/testes_e_resultados.md).
 
 ## Licença
 
-Este projeto acadêmico é distribuído sob a licença MIT. Consulte [LICENSE](LICENSE).
+Projeto acadêmico distribuído sob a licença MIT. Consulte [LICENSE](LICENSE).

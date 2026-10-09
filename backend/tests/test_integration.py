@@ -327,7 +327,8 @@ def test_smtp_uses_tls_and_app_password(monkeypatch):
 
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("SMTP_USER", "projeto@example.com")
-    monkeypatch.setenv("SMTP_APP_PASSWORD", "test-only-app-password")
+    monkeypatch.setenv("SMTP_PASSWORD", "test-only-app-password")
+    monkeypatch.setenv("SMTP_FROM", "projeto@example.com")
     monkeypatch.setattr(mailer.smtplib, "SMTP", SMTP)
     mailer.send_recovery("patient@example.com", "123456")
     assert calls[1] == ("tls",)
@@ -371,7 +372,7 @@ def test_presential_flow_and_queue(client):
         client.put(
             path, headers=headers["medico"], json={"status": "em_atendimento"}
         ).status_code
-        == 409
+        == 403
     )
     assert (
         client.put(
@@ -411,13 +412,13 @@ def test_presential_flow_and_queue(client):
         client.put(
             path, headers=headers["medico"], json={"status": "em_atendimento"}
         ).status_code
-        == 200
+        == 403
     )
     assert (
         client.put(
             path, headers=headers["medico"], json={"status": "concluido"}
         ).status_code
-        == 200
+        == 403
     )
     assert (
         client.put(
@@ -425,7 +426,7 @@ def test_presential_flow_and_queue(client):
         ).status_code
         == 409
     )
-    assert client.get("/queue", headers=headers["medico"]).json() == []
+    assert client.get("/queue", headers=headers["medico"]).json()[0]["id"] == appointment_id
 
 
 def test_migrate_existing_database_without_loss(client, tmp_path):
@@ -447,6 +448,10 @@ def test_migrate_existing_database_without_loss(client, tmp_path):
         source.backup(destination)
     with sqlite3.connect(target) as connection:
         connection.execute("ALTER TABLE responsaveis DROP COLUMN email")
+        connection.execute(
+            "ALTER TABLE classificacoes_risco DROP COLUMN queixa_principal"
+        )
+        connection.execute("ALTER TABLE classificacoes_risco DROP COLUMN sinais_vitais")
         before = connection.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0]
     env = dict(os.environ, DATABASE_URL="sqlite:///" + str(target))
     result = subprocess.run(
@@ -467,6 +472,12 @@ def test_migrate_existing_database_without_loss(client, tmp_path):
         assert "ativo" in [
             x[1] for x in connection.execute("PRAGMA table_info(usuarios)")
         ]
+        risk_columns = [
+            x[1]
+            for x in connection.execute("PRAGMA table_info(classificacoes_risco)")
+        ]
+        assert "queixa_principal" in risk_columns
+        assert "sinais_vitais" in risk_columns
 
 
 @pytest.mark.parametrize("cns", [None, ""])
@@ -653,6 +664,9 @@ def test_slot_conflict_reschedule_and_release(client):
     first = client.post("/appointments", json=body(times[0]), headers=h)
     assert first.status_code == 201
     assert client.post("/appointments", json=body(times[0]), headers=h).status_code == 409
+    # RN01: mesmo com outro horário livre, a mesma especialidade/data não
+    # pode gerar uma segunda consulta ativa para o paciente.
+    assert client.post("/appointments", json=body(times[1]), headers=h).status_code == 409
     item_id = first.json()["id"]
     moved = client.post(f"/appointments/{item_id}/reschedule", headers=h,
         json={"doctor_id": doctor_id, "scheduled_at": times[1].isoformat()})
@@ -828,11 +842,11 @@ def test_admin_manages_internal_users_and_permissions(client):
     assert client.post("/admin/users", headers=headers,
         json={**reception, "email": "outra@example.com"}).status_code == 409
     with SessionLocal() as db:
-        users = list(db.scalars(select(User).where(User.perfil.in_(["recepcao", "profissional"]))))
+        users = list(db.scalars(select(User).where(User.perfil.in_(["recepcao", "medico"]))))
         assert all(u.senha_hash.startswith("$2b$") for u in users)
         assert db.scalar(select(func.count(AuditLog.id))) == 3
         reception_user = db.scalar(select(User).where(User.perfil == "recepcao"))
-        professional_user = db.scalar(select(User).where(User.perfil == "profissional"))
+        professional_user = db.scalar(select(User).where(User.perfil == "medico"))
         reception_headers = {"Authorization": "Bearer " + make_token(reception_user)}
         professional_headers = {"Authorization": "Bearer " + make_token(professional_user)}
     assert client.post("/admin/users", headers=reception_headers, json=reception).status_code == 403

@@ -1,9 +1,8 @@
 import logging
 import smtplib
-from datetime import datetime, timedelta
 import pytest
 from sqlalchemy import select, func
-from test_integration import client, register, login, recovery, header
+from test_integration import client, register, login
 from app.core.database import SessionLocal
 from app.models import User, Guardian, PatientGuardian, PasswordRecovery
 from app.services import mailer
@@ -223,7 +222,7 @@ def smtp(monkeypatch):
         "SMTP_HOST": "smtp.example.com",
         "SMTP_PORT": "587",
         "SMTP_USER": "sender@example.com",
-        "SMTP_PASSWORD": "test-secret",
+        "SMTP_PASSWORD": "mock-only-value",
         "SMTP_FROM": "sender@example.com",
         "SMTP_USE_TLS": "true",
     }.items():
@@ -275,7 +274,7 @@ def test_mail_tls_message_and_no_secret_logging(smtp, monkeypatch, caplog, capsy
     assert "123456" in message.get_content() and "10 minutos" in message.get_content()
     assert message["Subject"] == "Código para recuperação de senha - UBS Rápida"
     assert "123456" not in caplog.text + capsys.readouterr().out
-    assert "test-secret" not in caplog.text
+    assert "mock-only-value" not in caplog.text
     assert events[2][1]["context"].check_hostname
     assert events[0][2]["timeout"] == 10
 
@@ -296,6 +295,7 @@ def test_implicit_tls(smtp, monkeypatch):
         ("offline", "SMTP_UNAVAILABLE"),
         ("email", "SMTP_INVALID_ADDRESS"),
         ("tls", "SMTP_TLS_REQUIRED"),
+        ("port", "SMTP_PORT_INVALID"),
         ("disabled", "SMTP_DISABLED"),
     ],
 )
@@ -306,6 +306,8 @@ def test_mail_failures(smtp, monkeypatch, case, expected):
         monkeypatch.delenv("SMTP_USER")
     if case == "tls":
         monkeypatch.setenv("SMTP_USE_TLS", "false")
+    if case == "port":
+        monkeypatch.setenv("SMTP_PORT", "25")
     if case == "disabled":
         monkeypatch.setenv("SMTP_ENABLED", "false")
     if case == "email":
@@ -324,3 +326,37 @@ def test_mail_failures(smtp, monkeypatch, case, expected):
     with pytest.raises(mailer.MailUnavailable) as error:
         mailer.send_recovery(recipient, "123456")
     assert error.value.reason == expected and "secret" not in str(error.value)
+
+
+def test_placeholder_configuration_names_fields_without_leaking_values(
+    smtp, monkeypatch, caplog
+):
+    monkeypatch.setenv("SMTP_USER", "COLOQUE_SEU_EMAIL_AQUI")
+    monkeypatch.setenv("SMTP_PASSWORD", "COLOQUE_A_CREDENCIAL_AQUI")
+    monkeypatch.setenv("SMTP_FROM", "COLOQUE_SEU_EMAIL_AQUI")
+
+    with caplog.at_level(logging.ERROR), pytest.raises(mailer.MailUnavailable) as error:
+        mailer.send_email_verification("patient@example.com", "123456")
+
+    assert error.value.reason == "SMTP_CONFIG_MISSING"
+    assert "SMTP_USER,SMTP_PASSWORD,SMTP_FROM" in caplog.text
+    assert "COLOQUE_SEU_EMAIL_AQUI" not in caplog.text
+    assert "COLOQUE_A_CREDENCIAL_AQUI" not in caplog.text
+
+
+def test_authentication_failure_logs_only_safe_technical_cause(
+    smtp, monkeypatch, caplog
+):
+    _, fake = smtp
+
+    def fail_auth(*args):
+        raise smtplib.SMTPAuthenticationError(535, b"sensitive provider response")
+
+    monkeypatch.setattr(fake, "login", fail_auth)
+    with caplog.at_level(logging.ERROR), pytest.raises(mailer.MailUnavailable) as error:
+        mailer.send_email_verification("patient@example.com", "123456")
+
+    assert error.value.reason == "SMTP_AUTH_FAILED"
+    assert "exception_type=SMTPAuthenticationError" in caplog.text
+    assert "sensitive provider response" not in caplog.text
+    assert "123456" not in caplog.text

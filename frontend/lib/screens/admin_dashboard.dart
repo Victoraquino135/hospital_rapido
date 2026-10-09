@@ -9,6 +9,7 @@ enum AdminSection {
   grids('Grades e horários', Icons.calendar_month_outlined),
   specialties('Especialidades', Icons.medical_information_outlined),
   professionals('Profissionais', Icons.medical_services_outlined),
+  doctors('Médicos', Icons.health_and_safety_outlined),
   users('Usuários internos', Icons.manage_accounts_outlined),
   history('Histórico', Icons.history_outlined),
   settings('Configurações', Icons.settings_outlined);
@@ -31,6 +32,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   AdminSummary? summary;
   List<AdminAppointment> appointments = [];
   List<InternalUser> users = [];
+  List<DoctorAccount> doctors = [];
   List<Map<String, dynamic>> specialties = [],
       professionals = [],
       queue = [],
@@ -39,6 +41,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool loading = true;
   String? error;
   Timer? refreshTimer;
+  final specialtySearch = TextEditingController();
 
   @override
   void initState() {
@@ -52,6 +55,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   void dispose() {
     refreshTimer?.cancel();
+    specialtySearch.dispose();
     super.dispose();
   }
 
@@ -90,10 +94,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         case AdminSection.users:
         case AdminSection.professionals:
           users = await api.internalUsers(
-              role: section == AdminSection.professionals
-                  ? 'profissional'
-                  : null);
+              role: section == AdminSection.professionals ? 'medico' : null);
           specialties = await api.adminSpecialties();
+        case AdminSection.doctors:
+          doctors = await api.doctors();
         case AdminSection.specialties:
           specialties = await api.adminSpecialties();
         case AdminSection.grids:
@@ -174,6 +178,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       AdminSection.queue => _queue(),
       AdminSection.grids => _grids(),
       AdminSection.specialties => _specialties(),
+      AdminSection.doctors => _doctors(),
       AdminSection.professionals || AdminSection.users => _users(),
       AdminSection.history => _history(),
       AdminSection.settings => _settings(),
@@ -285,28 +290,122 @@ class _AdminDashboardState extends State<AdminDashboard> {
       professionalOnly: section == AdminSection.professionals,
       onChanged: load);
 
-  Widget _specialties() => ListView(children: [
-        _title('Clínica Geral',
-            'No MVP, somente Clínica Geral pode ser utilizada em profissionais e agendas.'),
-        const SizedBox(height: 16),
-        if (specialties.isEmpty)
-          const _EmptyState('Nenhuma especialidade cadastrada.'),
-        for (final item in specialties)
-          Card(
-              child: ListTile(
-                  leading: const Icon(Icons.medical_information_outlined),
-                  title: Text(item['name'].toString()),
-                  subtitle: Text(
-                      (item['active'] as bool? ?? true) ? 'Ativa' : 'Inativa'),
-                  trailing: IconButton(
-                      tooltip: (item['active'] as bool? ?? true)
-                          ? 'Desativar'
-                          : 'Ativar',
-                      onPressed: () => _toggleSpecialty(item),
-                      icon: Icon((item['active'] as bool? ?? true)
-                          ? Icons.block_outlined
-                          : Icons.check_circle_outline))))
-      ]);
+  Widget _doctors() =>
+      _DoctorsView(api: api, initial: doctors, onChanged: load);
+
+  Widget _specialties() {
+    final query = specialtySearch.text.trim().toLowerCase();
+    final filtered = specialties
+        .where((item) => item['name'].toString().toLowerCase().contains(query))
+        .toList();
+    return ListView(children: [
+      _title('Especialidades',
+          'Cadastre, edite e controle quais especialidades estão disponíveis para novos agendamentos.',
+          action: FilledButton.icon(
+              key: const Key('new-specialty-button'),
+              onPressed: _openSpecialtyForm,
+              icon: const Icon(Icons.add),
+              label: const Text('Nova especialidade'))),
+      const SizedBox(height: 16),
+      TextField(
+          key: const Key('specialty-search-field'),
+          controller: specialtySearch,
+          onChanged: (_) => setState(() {}),
+          decoration: const InputDecoration(
+              labelText: 'Pesquisar especialidades',
+              hintText: 'Digite o nome da especialidade',
+              prefixIcon: Icon(Icons.search),
+              suffixIcon: Icon(Icons.manage_search))),
+      const SizedBox(height: 16),
+      if (specialties.isEmpty)
+        const _EmptyState('Nenhuma especialidade cadastrada.')
+      else if (filtered.isEmpty)
+        const _EmptyState('Nenhuma especialidade encontrada.')
+      else
+        for (final item in filtered) ...[
+          _specialtyCard(item),
+          const SizedBox(height: 12)
+        ]
+    ]);
+  }
+
+  Widget _specialtyCard(Map<String, dynamic> item) {
+    final active = item['active'] as bool? ?? true;
+    final details = Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(active ? Icons.check_circle_outline : Icons.block_outlined,
+          size: 20,
+          color: active ? green : Theme.of(context).colorScheme.error),
+      const SizedBox(width: 8),
+      Text(active ? 'Ativa' : 'Inativa', style: const TextStyle(fontSize: 16))
+    ]);
+    final actions = Wrap(spacing: 8, runSpacing: 8, children: [
+      OutlinedButton.icon(
+          key: Key('edit-specialty-${item['id']}'),
+          onPressed: () => _openSpecialtyForm(item),
+          icon: const Icon(Icons.edit_outlined),
+          label: const Text('Editar')),
+      OutlinedButton.icon(
+          key: Key('toggle-specialty-${item['id']}'),
+          onPressed: () => _toggleSpecialty(item),
+          icon:
+              Icon(active ? Icons.block_outlined : Icons.check_circle_outline),
+          label: Text(active ? 'Desativar' : 'Ativar'))
+    ]);
+    return Semantics(
+        container: true,
+        label: 'Especialidade ${item['name']}, ${active ? 'ativa' : 'inativa'}',
+        child: Card(
+            child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: LayoutBuilder(builder: (context, constraints) {
+                  final information = Row(children: [
+                    const Icon(Icons.medical_information_outlined, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Text(item['name'].toString(),
+                              style: Theme.of(context).textTheme.titleMedium,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2),
+                          const SizedBox(height: 6),
+                          details
+                        ]))
+                  ]);
+                  if (constraints.maxWidth < 620) {
+                    return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          information,
+                          const SizedBox(height: 12),
+                          Align(
+                              alignment: Alignment.centerRight, child: actions)
+                        ]);
+                  }
+                  return Row(children: [
+                    Expanded(child: information),
+                    const SizedBox(width: 16),
+                    actions
+                  ]);
+                }))));
+  }
+
+  Future<void> _openSpecialtyForm([Map<String, dynamic>? existing]) async {
+    final saved = await showDialog<bool>(
+        context: context,
+        builder: (_) => _SpecialtyFormDialog(api: api, existing: existing));
+    if (saved == true) {
+      await load();
+      if (mounted) {
+        notice(
+            context,
+            existing == null
+                ? 'Especialidade criada com sucesso.'
+                : 'Especialidade atualizada com sucesso.');
+      }
+    }
+  }
 
   Future<void> _toggleSpecialty(Map<String, dynamic> item) async {
     final active = item['active'] as bool? ?? true;
@@ -469,6 +568,106 @@ class _AdminDashboardState extends State<AdminDashboard> {
       controller.dispose();
     }
   }
+}
+
+class _SpecialtyFormDialog extends StatefulWidget {
+  const _SpecialtyFormDialog({required this.api, this.existing});
+
+  final ApiService api;
+  final Map<String, dynamic>? existing;
+
+  @override
+  State<_SpecialtyFormDialog> createState() => _SpecialtyFormDialogState();
+}
+
+class _SpecialtyFormDialogState extends State<_SpecialtyFormDialog> {
+  final formKey = GlobalKey<FormState>();
+  late final TextEditingController name =
+      TextEditingController(text: widget.existing?['name']?.toString() ?? '');
+  bool saving = false;
+  String? serverError;
+
+  bool get editing => widget.existing != null;
+
+  @override
+  void dispose() {
+    name.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    setState(() => serverError = null);
+    if (!(formKey.currentState?.validate() ?? false)) return;
+    setState(() => saving = true);
+    try {
+      if (editing) {
+        await widget.api
+            .updateSpecialty(widget.existing!['id'] as int, name.text.trim());
+      } else {
+        await widget.api.createSpecialty(name.text.trim());
+      }
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          serverError = error.message;
+          saving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+          title: Text(editing ? 'Editar especialidade' : 'Nova especialidade'),
+          content: SizedBox(
+              width: 480,
+              child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    TextFormField(
+                        key: const Key('specialty-name-field'),
+                        controller: name,
+                        autofocus: true,
+                        enabled: !saving,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => save(),
+                        maxLength: 80,
+                        decoration: const InputDecoration(
+                            labelText: 'Nome da especialidade',
+                            hintText: 'Ex.: Pediatria',
+                            prefixIcon:
+                                Icon(Icons.medical_information_outlined)),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? 'Informe o nome da especialidade.'
+                                : null),
+                    if (serverError != null) ...[
+                      const SizedBox(height: 12),
+                      Semantics(
+                          liveRegion: true,
+                          child: Text(serverError!,
+                              key: const Key('specialty-form-error'),
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontWeight: FontWeight.w600)))
+                    ]
+                  ])))),
+          actions: [
+            TextButton(
+                onPressed: saving ? null : () => Navigator.pop(context, false),
+                child: const Text('Cancelar')),
+            FilledButton.icon(
+                key: const Key('save-specialty-button'),
+                onPressed: saving ? null : save,
+                icon: saving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.save_outlined),
+                label: Text(editing ? 'Salvar alterações' : 'Salvar'))
+          ]);
 }
 
 class _AuditMetadata extends StatelessWidget {
@@ -813,6 +1012,307 @@ class _AgendaAdminViewState extends State<_AgendaAdminView> {
       ]);
 }
 
+class _DoctorsView extends StatefulWidget {
+  const _DoctorsView(
+      {required this.api, required this.initial, required this.onChanged});
+  final ApiService api;
+  final List<DoctorAccount> initial;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_DoctorsView> createState() => _DoctorsViewState();
+}
+
+class _DoctorsViewState extends State<_DoctorsView> {
+  late List<DoctorAccount> doctors = widget.initial;
+  late bool hasActiveDoctor = widget.initial.any((doctor) => doctor.active);
+  final search = TextEditingController();
+  bool busy = false;
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  Future<void> filter() async {
+    setState(() => busy = true);
+    try {
+      final values = await Future.wait([
+        widget.api.doctors(search: search.text),
+        widget.api.doctors(active: true),
+      ]);
+      doctors = values[0];
+      hasActiveDoctor = values[1].isNotEmpty;
+    } on ApiException catch (e) {
+      if (mounted) notice(context, e.message);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> openForm([DoctorAccount? existing]) async {
+    await showDialog<void>(
+        context: context,
+        builder: (_) => _DoctorDialog(api: widget.api, existing: existing));
+    await filter();
+    await widget.onChanged();
+  }
+
+  Future<void> toggle(DoctorAccount doctor) async {
+    if (doctor.active) {
+      final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+                title: const Text('Desativar Médico?'),
+                content: Text(
+                    '${doctor.name} perderá o acesso, mas consultas e histórico serão preservados.'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Desativar')),
+                ],
+              ));
+      if (confirmed != true) return;
+    }
+    try {
+      await widget.api.setDoctorActive(doctor.id, !doctor.active);
+      await filter();
+      await widget.onChanged();
+      if (mounted) {
+        notice(
+            context, doctor.active ? 'Médico desativado.' : 'Médico ativado.');
+      }
+    } on ApiException catch (e) {
+      if (mounted) notice(context, e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(children: [
+      ResponsivePageHeader(
+          title: 'Médicos',
+          subtitle: 'Contas com acesso exclusivo à fila médica.',
+          primaryAction: AppActionButton(
+              label: 'Cadastrar Médico',
+              icon: Icons.person_add_alt_1,
+              onPressed: () => openForm())),
+      const SizedBox(height: AppSpacing.md),
+      Semantics(
+          label: hasActiveDoctor
+              ? 'Há Médico ativo para atendimento'
+              : 'Não há Médico ativo para atendimento',
+          child: AppSurfaceCard(
+              child: Row(children: [
+            Icon(
+                hasActiveDoctor
+                    ? Icons.check_circle_outline
+                    : Icons.warning_amber,
+                color: hasActiveDoctor
+                    ? green
+                    : Theme.of(context).colorScheme.error),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+                child: Text(hasActiveDoctor
+                    ? 'Há Médico ativo para atendimento'
+                    : 'Não há Médico ativo para atendimento')),
+          ]))),
+      const SizedBox(height: AppSpacing.md),
+      Row(children: [
+        Expanded(
+            child: TextField(
+                key: const Key('doctor-search'),
+                controller: search,
+                decoration: const InputDecoration(
+                    labelText: 'Pesquisar por nome ou CPF',
+                    prefixIcon: Icon(Icons.search)),
+                onSubmitted: (_) => filter())),
+        const SizedBox(width: AppSpacing.sm),
+        IconButton.filledTonal(
+            tooltip: 'Pesquisar',
+            onPressed: busy ? null : filter,
+            icon: const Icon(Icons.search)),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      if (busy) const LinearProgressIndicator(),
+      if (!busy && doctors.isEmpty)
+        const AppEmptyState(
+            icon: Icons.medical_services_outlined,
+            title: 'Nenhum Médico encontrado',
+            message: 'Cadastre uma conta ou altere o termo pesquisado.'),
+      for (final doctor in doctors) ...[
+        AppSurfaceCard(child: LayoutBuilder(builder: (context, constraints) {
+          final details =
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(doctor.name,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            Text('${doctor.maskedCpf} • ${doctor.specialty}'),
+            Text(doctor.active ? 'Ativo' : 'Inativo'),
+          ]);
+          final actions = Wrap(spacing: 8, runSpacing: 8, children: [
+            IconButton(
+                tooltip: 'Editar Médico',
+                onPressed: () => openForm(doctor),
+                icon: const Icon(Icons.edit_outlined)),
+            IconButton(
+                tooltip: doctor.active ? 'Desativar Médico' : 'Ativar Médico',
+                onPressed: () => toggle(doctor),
+                icon: Icon(doctor.active
+                    ? Icons.block_outlined
+                    : Icons.check_circle_outline)),
+          ]);
+          return constraints.maxWidth < 540
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                      details,
+                      const SizedBox(height: AppSpacing.sm),
+                      Align(alignment: Alignment.centerRight, child: actions),
+                    ])
+              : Row(children: [
+                  Expanded(child: details),
+                  actions,
+                ]);
+        })),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+    ]);
+  }
+}
+
+class _DoctorDialog extends StatefulWidget {
+  const _DoctorDialog({required this.api, this.existing});
+  final ApiService api;
+  final DoctorAccount? existing;
+
+  @override
+  State<_DoctorDialog> createState() => _DoctorDialogState();
+}
+
+class _DoctorDialogState extends State<_DoctorDialog> {
+  final formKey = GlobalKey<FormState>();
+  late final name = TextEditingController(text: widget.existing?.name);
+  final cpf = TextEditingController();
+  final password = TextEditingController();
+  final confirmation = TextEditingController();
+  late bool active = widget.existing?.active ?? true;
+  bool saving = false;
+
+  @override
+  void dispose() {
+    name.dispose();
+    cpf.dispose();
+    password.dispose();
+    confirmation.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    if (!formKey.currentState!.validate()) return;
+    setState(() => saving = true);
+    final data = <String, dynamic>{
+      'name': name.text.trim(),
+      'active': active,
+      if (cpf.text.trim().isNotEmpty) 'cpf': digits(cpf.text),
+      if (widget.existing == null) 'password': password.text,
+      if (widget.existing == null) 'password_confirmation': confirmation.text,
+    };
+    try {
+      if (widget.existing == null) {
+        await widget.api.createDoctor(data);
+      } else {
+        await widget.api.updateDoctor(widget.existing!.id, data);
+      }
+      if (mounted) Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (mounted) notice(context, e.message);
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(
+            widget.existing == null ? 'Cadastrar Médico' : 'Editar Médico'),
+        content: SizedBox(
+            width: 540,
+            child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                    child: Column(children: [
+                  TextFormField(
+                      controller: name,
+                      decoration: const InputDecoration(
+                          labelText: 'Nome completo',
+                          prefixIcon: Icon(Icons.person_outline)),
+                      validator: requiredName),
+                  const SizedBox(height: AppSpacing.md),
+                  TextFormField(
+                      controller: cpf,
+                      inputFormatters: [CpfFormatter()],
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                          labelText: widget.existing == null
+                              ? 'CPF'
+                              : 'Novo CPF (opcional)',
+                          prefixIcon: const Icon(Icons.badge_outlined)),
+                      validator: (value) => widget.existing != null &&
+                              (value ?? '').trim().isEmpty
+                          ? null
+                          : requiredCpf(value)),
+                  if (widget.existing == null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    TextFormField(
+                        controller: password,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Senha',
+                            prefixIcon: Icon(Icons.lock_outline)),
+                        validator: passwordRule),
+                    const SizedBox(height: AppSpacing.md),
+                    TextFormField(
+                        controller: confirmation,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Confirmar senha',
+                            prefixIcon: Icon(Icons.lock_reset)),
+                        validator: (value) => value != password.text
+                            ? 'As senhas não coincidem.'
+                            : null),
+                  ],
+                  SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Conta ativa'),
+                      value: active,
+                      onChanged: saving
+                          ? null
+                          : (value) => setState(() => active = value)),
+                  const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.health_and_safety_outlined),
+                      title: Text('Perfil: Médico'),
+                      subtitle: Text('Especialidade inicial: Clínica Geral')),
+                ])))),
+        actions: [
+          TextButton(
+              onPressed: saving ? null : () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton.icon(
+              onPressed: saving ? null : save,
+              icon: const Icon(Icons.save_outlined),
+              label: Text(saving ? 'Salvando...' : 'Salvar')),
+        ],
+      );
+}
+
 class _InternalUsersView extends StatefulWidget {
   const _InternalUsersView(
       {required this.api,
@@ -846,7 +1346,7 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
     try {
       users = await widget.api.internalUsers(
           search: search.text,
-          role: widget.professionalOnly ? 'profissional' : role,
+          role: widget.professionalOnly ? 'medico' : role,
           active: active);
     } on ApiException catch (e) {
       if (mounted) notice(context, e.message);
@@ -921,8 +1421,7 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
                           value: 'recepcao', child: Text('Recepção')),
                       DropdownMenuItem(
                           value: 'enfermagem', child: Text('Enfermagem')),
-                      DropdownMenuItem(
-                          value: 'profissional', child: Text('Profissional'))
+                      DropdownMenuItem(value: 'medico', child: Text('Médico'))
                     ],
                     onChanged: (v) {
                       role = v;
@@ -954,12 +1453,12 @@ class _InternalUsersViewState extends State<_InternalUsersView> {
             final identity = ListTile(
                 leading: CircleAvatar(
                     child: Icon(
-                        user.role == 'profissional' || user.role == 'enfermagem'
+                        user.role == 'medico' || user.role == 'enfermagem'
                             ? Icons.medical_services
                             : Icons.support_agent)),
                 title: Text(user.name),
                 subtitle: Text(
-                    '${user.role == 'profissional' ? 'Profissional' : user.role == 'enfermagem' ? 'Enfermagem' : user.role == 'admin' ? 'Administrador' : 'Recepção'} • ${user.maskedCpf}\n${user.email}${user.specialty == null ? '' : ' • ${user.specialty}'}'),
+                    '${user.role == 'medico' ? 'Médico' : user.role == 'enfermagem' ? 'Enfermagem' : user.role == 'admin' ? 'Administrador' : 'Recepção'} • ${user.maskedCpf}\n${user.email}${user.specialty == null ? '' : ' • ${user.specialty}'}'),
                 isThreeLine: true);
             final actions = Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(user.active ? Icons.check_circle : Icons.block,
@@ -1120,10 +1619,9 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
       'name': name.text.trim(),
       'email': email.text.trim(),
       'role': role,
-      if (role == 'profissional' || role == 'enfermagem')
+      if (role == 'medico' || role == 'enfermagem')
         'professional_registration': registration.text.trim(),
-      if (role == 'profissional' || role == 'enfermagem')
-        'specialty_id': specialtyId,
+      if (role == 'medico' || role == 'enfermagem') 'specialty_id': specialtyId,
       if (role == 'enfermagem') 'can_triage': true
     };
     if (widget.existing == null) {
@@ -1190,8 +1688,8 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                           DropdownMenuItem(
                               value: 'enfermagem', child: Text('Enfermagem')),
                           DropdownMenuItem(
-                              value: 'profissional',
-                              child: Text('Profissional de saúde',
+                              value: 'medico',
+                              child: Text('Médico',
                                   overflow: TextOverflow.ellipsis))
                         ],
                         onChanged: (v) => setState(() {
@@ -1202,7 +1700,7 @@ class _InternalUserDialogState extends State<_InternalUserDialog> {
                               }
                             })),
                     const SizedBox(height: 16),
-                    if (role == 'profissional' || role == 'enfermagem') ...[
+                    if (role == 'medico' || role == 'enfermagem') ...[
                       field(registration, 'Registro profissional',
                           Icons.workspace_premium_outlined,
                           errorText: errors['professional_registration']),

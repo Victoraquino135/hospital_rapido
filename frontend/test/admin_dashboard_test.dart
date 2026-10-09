@@ -127,6 +127,46 @@ class FakeAdminContentApi extends FakeAdminApi {
       ];
 }
 
+class FakeSpecialtyManagementApi extends FakeAdminApi {
+  final items = <Map<String, dynamic>>[
+    {'id': 1, 'name': 'Clínica Geral', 'active': true}
+  ];
+
+  @override
+  Future<List<Map<String, dynamic>>> adminSpecialties() async =>
+      items.map((item) => Map<String, dynamic>.from(item)).toList();
+
+  @override
+  Future<Map<String, dynamic>> createSpecialty(String name) async {
+    final normalized = name.trim().toLowerCase();
+    if (items.any(
+        (item) => item['name'].toString().trim().toLowerCase() == normalized)) {
+      throw const ApiException('Especialidade já cadastrada', statusCode: 409);
+    }
+    final item = <String, dynamic>{
+      'id': items.length + 1,
+      'name': name.trim(),
+      'active': true
+    };
+    items.add(item);
+    return Map<String, dynamic>.from(item);
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateSpecialty(int id, String name) async {
+    final item = items.firstWhere((value) => value['id'] == id);
+    item['name'] = name.trim();
+    return Map<String, dynamic>.from(item);
+  }
+
+  @override
+  Future<Map<String, dynamic>> setSpecialtyActive(int id, bool active) async {
+    final item = items.firstWhere((value) => value['id'] == id);
+    item['active'] = active;
+    return Map<String, dynamic>.from(item);
+  }
+}
+
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -210,9 +250,97 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull,
         reason: 'A lista de usuários deve caber antes de abrir o diálogo.');
+    await tester.ensureVisible(find.text('Cadastrar usuário'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Cadastrar usuário'));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'administrador cria pesquisa e edita especialidade com validacao clara',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 850));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = FakeSpecialtyManagementApi();
+    await tester.pumpWidget(UbsApp(home: AdminDashboard(api: api)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Especialidades').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('new-specialty-button')), findsOneWidget);
+    expect(find.text('Editar'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('new-specialty-button')));
+    await tester.pumpAndSettle();
+    expect(
+        find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text('Nova especialidade')),
+        findsOneWidget);
+    expect(find.text('Cancelar'), findsOneWidget);
+    expect(find.text('Salvar'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('save-specialty-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Informe o nome da especialidade.'), findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(const Key('specialty-name-field')), 'Pediatria');
+    await tester.tap(find.byKey(const Key('save-specialty-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Especialidade criada com sucesso.'), findsOneWidget);
+    expect(find.text('Pediatria'), findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(const Key('specialty-search-field')), 'pedia');
+    await tester.pumpAndSettle();
+    expect(find.text('Pediatria'), findsOneWidget);
+    expect(find.text('Clínica Geral'), findsNothing);
+    await tester.enterText(find.byKey(const Key('specialty-search-field')), '');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('edit-specialty-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Editar especialidade'), findsOneWidget);
+    expect(
+        tester
+            .widget<TextFormField>(
+                find.byKey(const Key('specialty-name-field')))
+            .controller!
+            .text,
+        'Pediatria');
+    await tester.enterText(
+        find.byKey(const Key('specialty-name-field')), 'Pediatria Infantil');
+    await tester.tap(find.byKey(const Key('save-specialty-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Pediatria Infantil'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('formulario de especialidade exibe erro retornado pela API',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final api = FakeSpecialtyManagementApi();
+    await tester.pumpWidget(UbsApp(home: AdminDashboard(api: api)));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const Key('responsive-compact-destination-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Especialidades').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('new-specialty-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('new-specialty-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('specialty-name-field')), 'clínica geral');
+    await tester.tap(find.byKey(const Key('save-specialty-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('specialty-form-error')), findsOneWidget);
+    expect(find.text('Especialidade já cadastrada'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -250,8 +378,8 @@ void main() {
 
     accessibility.setFontScale(1.3);
     await tester.binding.setSurfaceSize(const Size(360, 780));
-    await tester.pumpWidget(
-        UbsApp(home: AdminDashboard(api: FakeAdminContentApi())));
+    await tester
+        .pumpWidget(UbsApp(home: AdminDashboard(api: FakeAdminContentApi())));
     await tester.pumpAndSettle();
     await tester
         .tap(find.byKey(const Key('responsive-compact-destination-picker')));
@@ -298,7 +426,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  test('direcionamento reconhece os quatro perfis', () {
+  test('direcionamento reconhece os cinco perfis', () {
     ApiService.session =
         const Session('t', 'Paciente Fictício', 'paciente', []);
     expect(homeForRole(), isA<PatientDashboard>());
@@ -308,8 +436,10 @@ void main() {
         const Session('t', 'Recepção Fictícia', 'recepcao', []);
     expect(homeForRole(), isA<StaffDashboard>());
     ApiService.session =
-        const Session('t', 'Profissional Fictício', 'profissional', []);
+        const Session('t', 'Enfermagem Fictícia', 'enfermagem', []);
     expect(homeForRole(), isA<StaffDashboard>());
+    ApiService.session = const Session('t', 'Médico Fictício', 'medico', []);
+    expect(homeForRole(), isA<MedicalDashboard>());
   });
 
   testWidgets('ver detalhes abre modal e mantém o painel aberto',

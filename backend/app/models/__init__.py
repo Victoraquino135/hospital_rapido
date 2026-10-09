@@ -11,6 +11,7 @@ class User(Base):
     cns: Mapped[str | None] = mapped_column(String(15), unique=True, index=True, nullable=True)
     data_nascimento: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     email: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    email_verificado: Mapped[bool] = mapped_column(Boolean, default=False)
     telefone: Mapped[str | None] = mapped_column(String(11), nullable=True)
     senha_hash: Mapped[str] = mapped_column(String(255))
     perfil: Mapped[str] = mapped_column(String(20), default="paciente")
@@ -61,6 +62,8 @@ class Appointment(Base):
     chamado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     iniciado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     concluido_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    atendimento_medico_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True)
+    resumo_atendimento: Mapped[str | None] = mapped_column(Text, nullable=True)
     paciente = relationship("User", foreign_keys=[paciente_id], back_populates="consultas_paciente")
     medico = relationship("User", foreign_keys=[medico_id], back_populates="consultas_medico")
 
@@ -88,6 +91,17 @@ class PasswordRecovery(Base):
     utilizado: Mapped[bool] = mapped_column(default=False)
     verificado: Mapped[bool] = mapped_column(default=False)
     criado_em: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class EmailVerification(Base):
+    __tablename__ = "verificacoes_email"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    codigo_hash: Mapped[str] = mapped_column(String(64))
+    expira_em: Mapped[datetime] = mapped_column(DateTime, index=True)
+    tentativas: Mapped[int] = mapped_column(default=0)
+    utilizado: Mapped[bool] = mapped_column(default=False)
+    criado_em: Mapped[datetime] = mapped_column(default=datetime.utcnow, index=True)
 
 class RateLimit(Base):
     __tablename__ = 'limites_tentativas'
@@ -163,6 +177,8 @@ class RiskClassification(Base):
     )
     profissional_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
     nivel_risco: Mapped[str] = mapped_column(String(20), index=True)
+    queixa_principal: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sinais_vitais: Mapped[str | None] = mapped_column(String(500), nullable=True)
     observacao: Mapped[str | None] = mapped_column(String(500), nullable=True)
     classificado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     consulta = relationship("Appointment")

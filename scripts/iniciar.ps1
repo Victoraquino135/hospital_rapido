@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $env:PYTHONUTF8 = '1'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $OutputEncoding = [Console]::OutputEncoding
-$pastaProjeto = $PSScriptRoot
+$pastaProjeto = Split-Path -Parent $PSScriptRoot
 $pastaBackend = Join-Path $pastaProjeto 'backend'
 $pastaFrontend = Join-Path $pastaProjeto 'frontend'
 $arquivoBackend = Join-Path $pastaBackend 'app\main.py'
@@ -18,8 +18,9 @@ $arquivoFlutter = Join-Path $pastaFrontend 'pubspec.yaml'
 $scriptDemonstracao = Join-Path $pastaBackend 'seed_demonstracao.py'
 $scriptBackend = Join-Path $pastaBackend 'iniciar_backend.ps1'
 $executavelWindows = Join-Path $pastaFrontend 'build\windows\x64\runner\Release\ubs_saude.exe'
-$pythonPrincipal = Join-Path $pastaBackend 'venv\Scripts\python.exe'
-$pythonAlternativo = Join-Path $pastaBackend '.venv-integracao\Scripts\python.exe'
+$marcaBuildWindows = Join-Path (Split-Path $executavelWindows) '.ubs_build_stamp'
+$pastaAmbiente = Join-Path $pastaBackend 'venv'
+$pythonPrincipal = Join-Path $pastaAmbiente 'Scripts\python.exe'
 $requirements = Join-Path $pastaBackend 'requirements.txt'
 $setupEnv = Join-Path $pastaBackend 'setup_env.py'
 
@@ -93,9 +94,20 @@ function Parar-AplicativoAnterior {
     if ($processos) { Start-Sleep -Milliseconds 500 }
 }
 
-function Testar-AplicativoAtualizado {
-    if (-not (Test-Path -LiteralPath $executavelWindows)) { return $false }
-    $fontes = @(
+function Obter-HashArquivo {
+    param([string]$Caminho)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Caminho)
+    try {
+        return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $sha256.Dispose()
+    }
+}
+
+function Obter-AssinaturaFrontend {
+    $arquivos = @(
         Get-ChildItem -LiteralPath (Join-Path $pastaFrontend 'lib') -Recurse -File
         Get-ChildItem -LiteralPath (Join-Path $pastaFrontend 'assets') -Recurse -File -ErrorAction SilentlyContinue
         Get-ChildItem -LiteralPath (Join-Path $pastaFrontend 'windows') -Recurse -File |
@@ -105,9 +117,27 @@ function Testar-AplicativoAtualizado {
             }
         Get-Item -LiteralPath $arquivoFlutter
         Get-Item -LiteralPath (Join-Path $pastaFrontend 'pubspec.lock') -ErrorAction SilentlyContinue
-    ) | Where-Object { $null -ne $_ }
-    $maisRecente = ($fontes | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum
-    return (Get-Item -LiteralPath $executavelWindows).LastWriteTimeUtc -ge $maisRecente
+    ) | Where-Object { $null -ne $_ } | Sort-Object FullName -Unique
+
+    $manifesto = foreach ($arquivo in $arquivos) {
+        $caminhoRelativo = $arquivo.FullName.Substring($pastaFrontend.Length).Replace('\', '/')
+        $hash = Obter-HashArquivo $arquivo.FullName
+        '{0}:{1}' -f $caminhoRelativo, $hash
+    }
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes(($manifesto -join "`n"))
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-', '')
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
+function Testar-AplicativoAtualizado {
+    if (-not (Test-Path -LiteralPath $executavelWindows) -or
+        -not (Test-Path -LiteralPath $marcaBuildWindows)) { return $false }
+    $assinaturaSalva = (Get-Content -LiteralPath $marcaBuildWindows -Raw).Trim()
+    return $assinaturaSalva -eq (Obter-AssinaturaFrontend)
 }
 
 foreach ($arquivo in @($arquivoBackend, $arquivoFlutter, $scriptDemonstracao, $scriptBackend, $setupEnv)) {
@@ -116,27 +146,40 @@ foreach ($arquivo in @($arquivoBackend, $arquivoFlutter, $scriptDemonstracao, $s
     }
 }
 
-$pythonAmbiente = Obter-PythonFuncional @($pythonPrincipal, $pythonAlternativo)
+$pythonAmbiente = Obter-PythonFuncional @($pythonPrincipal)
 $flutter = Obter-Flutter
 if (-not $pythonAmbiente) {
     $pythonSistema = Get-Command python -ErrorAction SilentlyContinue
     if (-not $pythonSistema) { throw 'Python 3 não foi encontrado.' }
+    if (Test-Path -LiteralPath $pastaAmbiente) {
+        throw "O ambiente virtual existe, mas não está funcional: $pastaAmbiente"
+    }
     Write-Host 'Preparando o ambiente do backend pela primeira vez...' -ForegroundColor Cyan
-    $pastaNovoAmbiente = Join-Path $pastaBackend '.venv-integracao'
-    & $pythonSistema.Source -m venv $pastaNovoAmbiente
-    $pythonAmbiente = $pythonAlternativo
+    & $pythonSistema.Source -m venv $pastaAmbiente
+    if ($LASTEXITCODE -ne 0) { throw 'Não foi possível criar o ambiente virtual do backend.' }
+    $pythonAmbiente = $pythonPrincipal
     & $pythonAmbiente -m pip install -r $requirements
     if ($LASTEXITCODE -ne 0) { throw 'Não foi possível instalar as dependências do backend.' }
 }
 
+if ($AtualizarTudo) {
+    Write-Host 'Atualizando as dependências do backend...' -ForegroundColor Cyan
+    & $pythonAmbiente -m pip install -r $requirements
+    if ($LASTEXITCODE -ne 0) { throw 'Não foi possível atualizar as dependências do backend.' }
+}
+
+Write-Host 'Validando a configuração segura de e-mail...' -ForegroundColor Cyan
 & $pythonAmbiente $setupEnv
-if ($LASTEXITCODE -ne 0) { throw 'Não foi possível validar a configuração do backend.' }
+if ($LASTEXITCODE -ne 0) {
+    throw 'Não foi possível verificar a configuração local do backend.'
+}
 
 if ($Validar) {
     Write-Host 'INICIAR_TUDO validado com sucesso.' -ForegroundColor Green
     Write-Host "Python: $pythonAmbiente"
     Write-Host "Flutter: $(if ($flutter) { $flutter } else { 'não localizado' })"
     Write-Host "Script de demonstração: $scriptDemonstracao"
+    Write-Host "Aplicativo Windows atualizado: $(if (Testar-AplicativoAtualizado) { 'sim' } else { 'não; será recompilado no próximo início' })"
     exit 0
 }
 
@@ -152,6 +195,14 @@ try {
 } finally { Pop-Location }
 
 Write-Host ''
+Write-Host 'CONTAS FICTÍCIAS DE ACESSO' -ForegroundColor Green
+Write-Host 'Administrador  CPF: 12345678909  Senha: Admin@123'
+Write-Host 'Recepção      CPF: 98765432100  Senha: Recepcao@123'
+Write-Host 'Enfermagem    CPF: 45678912364  Senha: Enfermagem@123'
+Write-Host 'Médico        CPF: 39053344705  Senha: Medico@123'
+Write-Host 'Paciente      CPF: 52998224725  Senha: Paciente@123'
+
+Write-Host ''
 Write-Host 'Abrindo o backend FastAPI em uma janela separada...' -ForegroundColor Cyan
 $argumentosBackend = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
@@ -159,7 +210,7 @@ $argumentosBackend = @(
     '-PythonPath', ('"{0}"' -f $pythonAmbiente)
 )
 Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentosBackend `
-    -WorkingDirectory $pastaBackend -WindowStyle Normal
+    -WorkingDirectory $pastaBackend -WindowStyle Hidden
 
 $apiPronta = $false
 for ($tentativa = 0; $tentativa -lt 40; $tentativa++) {
@@ -185,6 +236,7 @@ if ($Dispositivo -eq 'windows') {
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $executavelWindows)) {
                 throw 'Falha ao compilar o aplicativo Flutter para Windows.'
             }
+            Set-Content -LiteralPath $marcaBuildWindows -Value (Obter-AssinaturaFrontend)
         } finally { Pop-Location }
     }
     Write-Host 'Abrindo o frontend Flutter para Windows...' -ForegroundColor Cyan
@@ -200,15 +252,11 @@ Write-Host ''
 Write-Host 'UBS Rápida iniciado com sucesso.' -ForegroundColor Green
 Write-Host ''
 Write-Host 'Backend: http://127.0.0.1:8000/docs'
-Write-Host 'Frontend Flutter: iniciado no Windows'
-Write-Host ''
-Write-Host 'Acessos de demonstração:' -ForegroundColor Cyan
-Write-Host 'Administrador - CPF: 12345678909 - Senha: Admin@123'
-Write-Host 'Recepção      - CPF: 98765432100 - Senha: Recepcao@123'
-Write-Host 'Enfermagem    - CPF: 39053344705 - Senha: Enfermagem@123'
-Write-Host 'Clínica geral - CPF: 11144477735 - Senha: Profissional@123'
-Write-Host 'Pediatria     - CPF: 16899535009 - Senha: Pediatria@123'
-Write-Host 'Paciente      - CPF: 52998224725 - Senha: Paciente@123'
+if ($Dispositivo -eq 'windows') {
+    Write-Host 'Frontend Flutter: aplicativo Windows iniciado'
+} else {
+    Write-Host "Frontend Flutter: iniciado no navegador $Dispositivo em http://127.0.0.1:8080"
+}
 Write-Host ''
 Write-Host 'Faça login pelo CPF. O sistema abrirá automaticamente a tela do perfil correspondente.'
 if (-not $SemPausa) {

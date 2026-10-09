@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ubs_saude/main.dart';
 import 'package:ubs_saude/models/api_models.dart';
@@ -96,7 +97,7 @@ class FakePatientApi extends ApiService {
 void main() {
   testWidgets('patient_wide_layout_prioritizes_next_appointment',
       (tester) async {
-    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -104,16 +105,57 @@ void main() {
         .pumpWidget(MaterialApp(home: PatientDashboard(api: FakePatientApi())));
     await tester.pump();
     expect(find.byType(ResponsiveAppShell), findsOneWidget);
-    expect(find.byKey(const Key('wide-navigation-menu-button')), findsOneWidget);
+    expect(
+        find.byKey(const Key('wide-navigation-menu-button')), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Próxima consulta'), findsOneWidget);
     expect(find.text('Agendar consulta'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('menu do paciente fica fixo no canto superior esquerdo',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester
+        .pumpWidget(MaterialApp(home: PatientDashboard(api: FakePatientApi())));
+    await tester.pump();
+
+    final menu = find.byKey(const Key('wide-navigation-menu-button'));
+    final menuRect = tester.getRect(menu);
+    final titleRect = tester.getRect(find.text('Olá, Victor!'));
+    final brandRect = tester
+        .getRect(find.bySemanticsLabel('UBS Rápida, saúde perto de você'));
+
+    expect(menu, findsOneWidget);
+    expect(menuRect.left, lessThanOrEqualTo(24));
+    expect(menuRect.top, lessThanOrEqualTo(16));
+    expect(menuRect.size,
+        const Size(AppSizes.minTouchTarget, AppSizes.minTouchTarget));
+    expect(menuRect.overlaps(titleRect), isFalse);
+    expect(menuRect.overlaps(brandRect), isFalse);
+
+    var menuHasKeyboardFocus = false;
+    for (var attempt = 0; attempt < 20 && !menuHasKeyboardFocus; attempt++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      FocusManager.instance.primaryFocus?.context
+          ?.visitAncestorElements((element) {
+        if (element.widget.key == const Key('wide-navigation-menu-button')) {
+          menuHasKeyboardFocus = true;
+          return false;
+        }
+        return true;
+      });
+    }
+    expect(menuHasKeyboardFocus, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('patient_compact_layout_keeps_booking_action_48px',
       (tester) async {
-    tester.view.physicalSize = const Size(360, 780);
+    tester.view.physicalSize = const Size(390, 780);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -124,6 +166,26 @@ void main() {
         find.widgetWithText(AppActionButton, 'Agendar consulta').first;
     expect(action, findsOneWidget);
     expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cabeçalho do paciente mantém somente a ação de sair',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+        home: PatientDashboard(api: FakePatientApi(hasAppointment: false))));
+    await tester.pump();
+
+    final header = find.byType(ResponsivePageHeader);
+    expect(find.descendant(of: header, matching: find.text('Sair')),
+        findsOneWidget);
+    expect(find.descendant(of: header, matching: find.text('Agendar consulta')),
+        findsNothing);
+    expect(find.text('Agendar consulta'), findsWidgets,
+        reason: 'Os atalhos de agendamento do conteúdo devem permanecer.');
     expect(tester.takeException(), isNull);
   });
 
@@ -197,7 +259,11 @@ void main() {
     expect(find.text('Consultas'), findsOneWidget);
     expect(find.text('Status'), findsOneWidget);
     expect(find.text('Perfil'), findsOneWidget);
-    await tester.tap(find.text('Agendar consulta').first);
+    final bookingAction =
+        find.widgetWithText(AppActionButton, 'Agendar consulta').first;
+    await tester.ensureVisible(bookingAction);
+    await tester.pumpAndSettle();
+    await tester.tap(bookingAction);
     await tester.pumpAndSettle();
     expect(find.text('Especialidade'), findsOneWidget);
     expect(tester.takeException(), isNull);

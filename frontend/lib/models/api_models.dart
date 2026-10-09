@@ -76,6 +76,49 @@ class InternalUser {
   final int? specialtyId;
 }
 
+class DoctorAccount {
+  DoctorAccount.fromJson(Map<String, dynamic> v)
+      : id = v['id'] as int,
+        name = v['name'] as String,
+        maskedCpf = v['masked_cpf'] as String,
+        active = v['active'] as bool,
+        specialty = v['specialty'] as String? ?? 'Clínica Geral';
+  final int id;
+  final String name, maskedCpf, specialty;
+  final bool active;
+}
+
+class MedicalAppointment {
+  MedicalAppointment.fromJson(Map<String, dynamic> v)
+      : id = v['id'] as int,
+        scheduledAt = DateTime.parse(v['scheduled_at'] as String),
+        patient = v['patient'] as String,
+        age = v['age'] as int?,
+        specialty = v['specialty'] as String,
+        status = v['status'] as String,
+        legalPriority = v['legal_priority'] as String,
+        priorityReason = v['priority_reason'] as String,
+        risk = v['risk_classification'] as String,
+        riskLabel = v['risk_label'] as String,
+        complaint = v['triage_complaint'] as String,
+        vitalSigns = v['vital_signs'] as String,
+        triageObservation = v['triage_observation'] as String?,
+        careSummary = v['care_summary'] as String?;
+  final int id;
+  final int? age;
+  final DateTime scheduledAt;
+  final String patient,
+      specialty,
+      status,
+      legalPriority,
+      priorityReason,
+      risk,
+      riskLabel,
+      complaint,
+      vitalSigns;
+  final String? triageObservation, careSummary;
+}
+
 class AdminAppointment {
   AdminAppointment.fromJson(Map<String, dynamic> v)
       : id = v['id'] as int,

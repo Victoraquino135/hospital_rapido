@@ -1,6 +1,8 @@
 """Prepara configuração local sem imprimir segredos nem sobrescrever valores."""
 from pathlib import Path
 import secrets
+import sys
+from dotenv import dotenv_values
 
 root = Path(__file__).resolve().parent
 path = root / '.env'
@@ -32,3 +34,42 @@ else:
         print('Configuração existente preservada e variáveis ausentes adicionadas.')
     else:
         print('A configuração existente foi preservada.')
+
+# A checagem abaixo informa apenas nomes de campos e modo de transporte.
+# Valores do .env nunca são impressos.
+values = {key: (value or '').strip() for key, value in dotenv_values(path).items()}
+required = ('SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM')
+placeholders = ('COLOQUE', 'COLOCAR', 'PREENCHER', '_AQUI')
+invalid = [
+    key for key in required
+    if not values.get(key)
+    or any(marker in values[key].upper() for marker in placeholders)
+]
+smtp_error = False
+if invalid:
+    smtp_error = True
+    print(
+        'AVISO SMTP: preencha valores reais em backend/.env para: '
+        + ', '.join(invalid)
+        + '. Nenhum valor foi exibido.'
+    )
+else:
+    port = values.get('SMTP_PORT')
+    tls_enabled = values.get('SMTP_USE_TLS', 'true').lower() == 'true'
+    if port == '587' and tls_enabled:
+        print('SMTP: configuração local completa; transporte STARTTLS na porta 587.')
+    elif port == '465' and tls_enabled:
+        print('SMTP: configuração local completa; transporte SSL na porta 465.')
+    elif port not in {'465', '587'}:
+        smtp_error = True
+        print('AVISO SMTP: SMTP_PORT deve ser 587 (STARTTLS) ou 465 (SSL).')
+    else:
+        smtp_error = True
+        print('AVISO SMTP: SMTP_USE_TLS deve permanecer true para envio seguro.')
+
+if smtp_error and '--require-smtp' in sys.argv:
+    print(
+        'ERRO SMTP: corrija somente os campos indicados em backend/.env '
+        'e execute INICIAR_TUDO.bat novamente.'
+    )
+    raise SystemExit(2)

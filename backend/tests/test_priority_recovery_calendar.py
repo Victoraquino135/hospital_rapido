@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from test_integration import client, register, login
 from app.core.database import SessionLocal

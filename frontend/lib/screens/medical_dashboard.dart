@@ -1,0 +1,306 @@
+part of '../main.dart';
+
+class MedicalDashboard extends StatefulWidget {
+  const MedicalDashboard({super.key, this.api});
+  final ApiService? api;
+
+  @override
+  State<MedicalDashboard> createState() => _MedicalDashboardState();
+}
+
+class _MedicalDashboardState extends State<MedicalDashboard> {
+  late final ApiService api = widget.api ?? ApiService();
+  Timer? refreshTimer;
+  List<MedicalAppointment> queue = [];
+  bool loading = true, working = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+    refreshTimer =
+        Timer.periodic(const Duration(seconds: 4), (_) => load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load({bool silent = false}) async {
+    if (working) return;
+    working = true;
+    try {
+      final result = await api.medicalQueue();
+      if (!mounted) return;
+      setState(() {
+        queue = result;
+        error = null;
+        loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        error = e.message;
+        loading = false;
+      });
+      if (!silent) notice(context, e.message);
+    } finally {
+      working = false;
+    }
+  }
+
+  Future<void> _logout() async {
+    await ApiService.logout();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(context,
+          MaterialPageRoute(builder: (_) => const LoginPage()), (_) => false);
+    }
+  }
+
+  Future<void> _openCare(MedicalAppointment item) async {
+    MedicalAppointment details;
+    try {
+      details = await api.medicalDetails(item.id);
+    } on ApiException catch (e) {
+      if (mounted) notice(context, e.message);
+      return;
+    }
+    if (!mounted) return;
+    final completed = await showDialog<bool>(
+        context: context,
+        builder: (_) => _MedicalCareDialog(api: api, appointment: details));
+    if (completed == true) await load();
+  }
+
+  @override
+  Widget build(BuildContext context) => ResponsiveAppShell(
+        wideNavigationMode: WideNavigationMode.contentOnly,
+        title: 'Painel Médico',
+        subtitle: ApiService.session?.name,
+        primaryAction: Wrap(spacing: 8, runSpacing: 8, children: [
+          IconButton.filledTonal(
+              tooltip: 'Atualizar fila',
+              onPressed: working ? null : load,
+              icon: const Icon(Icons.refresh)),
+          OutlinedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Sair')),
+        ]),
+        body: loading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? AppErrorState(
+                    message: error!,
+                    actionLabel: 'Tentar novamente',
+                    onAction: load)
+                : RefreshIndicator(
+                    onRefresh: load,
+                    child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          AppSurfaceCard(
+                              child: Row(children: [
+                            const Icon(Icons.groups_2_outlined, size: 32),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                  Text('${queue.length}',
+                                      key: const Key('medical-waiting-count'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w800)),
+                                  const Text('pacientes na fila médica'),
+                                ]))
+                          ])),
+                          const SizedBox(height: AppSpacing.md),
+                          if (queue.isEmpty)
+                            const AppEmptyState(
+                                icon: Icons.event_available_outlined,
+                                title: 'Nenhum paciente aguardando',
+                                message:
+                                    'A fila será atualizada quando a triagem encaminhar um paciente.')
+                          else
+                            for (final item in queue) ...[
+                              _MedicalQueueCard(
+                                  item: item, onOpen: () => _openCare(item)),
+                              const SizedBox(height: AppSpacing.md),
+                            ],
+                        ])),
+      );
+}
+
+class _MedicalQueueCard extends StatelessWidget {
+  const _MedicalQueueCard({required this.item, required this.onOpen});
+  final MedicalAppointment item;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final time =
+        '${item.scheduledAt.hour.toString().padLeft(2, '0')}:${item.scheduledAt.minute.toString().padLeft(2, '0')}';
+    final inCare = item.status == 'em_atendimento';
+    return AppSurfaceCard(
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(inCare ? Icons.medical_services_outlined : Icons.schedule,
+            color: inCare ? green : blue),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(item.patient,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800)),
+          Text('$time • ${item.specialty}'),
+        ])),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        Chip(
+            avatar: const Icon(Icons.health_and_safety_outlined, size: 18),
+            label: Text('Risco: ${item.riskLabel}')),
+        Chip(
+            avatar: const Icon(Icons.priority_high, size: 18),
+            label: Text('Prioridade: ${item.priorityReason}')),
+        Chip(
+            avatar: Icon(inCare ? Icons.play_circle : Icons.hourglass_top,
+                size: 18),
+            label: Text(inCare ? 'Em atendimento' : 'Aguardando Médico')),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+              onPressed: onOpen,
+              icon:
+                  Icon(inCare ? Icons.description_outlined : Icons.play_arrow),
+              label: Text(
+                  inCare ? 'Continuar atendimento' : 'Iniciar atendimento')))
+    ]));
+  }
+}
+
+class _MedicalCareDialog extends StatefulWidget {
+  const _MedicalCareDialog({required this.api, required this.appointment});
+  final ApiService api;
+  final MedicalAppointment appointment;
+
+  @override
+  State<_MedicalCareDialog> createState() => _MedicalCareDialogState();
+}
+
+class _MedicalCareDialogState extends State<_MedicalCareDialog> {
+  final formKey = GlobalKey<FormState>();
+  final summary = TextEditingController();
+  late MedicalAppointment appointment = widget.appointment;
+  bool working = false;
+
+  @override
+  void dispose() {
+    summary.dispose();
+    super.dispose();
+  }
+
+  Future<void> _start() async {
+    setState(() => working = true);
+    try {
+      appointment = await widget.api.startMedicalCare(appointment.id);
+      if (mounted) setState(() {});
+    } on ApiException catch (e) {
+      if (mounted) notice(context, e.message);
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
+
+  Future<void> _complete() async {
+    if (!formKey.currentState!.validate()) return;
+    setState(() => working = true);
+    try {
+      await widget.api.completeMedicalCare(appointment.id, summary.text);
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (mounted) notice(context, e.message);
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final started = appointment.status == 'em_atendimento';
+    return AlertDialog(
+      title: Text(appointment.patient),
+      content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+              child: Form(
+                  key: formKey,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text('Idade: ${appointment.age ?? 'não informada'}'),
+                        Text('Especialidade: ${appointment.specialty}'),
+                        Text('Prioridade: ${appointment.priorityReason}'),
+                        Text(
+                            'Classificação de risco: ${appointment.riskLabel}'),
+                        const Divider(height: 32),
+                        Text('Queixa principal',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(appointment.complaint),
+                        const SizedBox(height: AppSpacing.md),
+                        Text('Sinais vitais',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(appointment.vitalSigns),
+                        if (appointment.triageObservation != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text('Observação da triagem',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          Text(appointment.triageObservation!),
+                        ],
+                        if (started) ...[
+                          const SizedBox(height: AppSpacing.lg),
+                          TextFormField(
+                              key: const Key('medical-care-summary'),
+                              controller: summary,
+                              minLines: 3,
+                              maxLines: 6,
+                              maxLength: 2000,
+                              decoration: const InputDecoration(
+                                  labelText: 'Resumo do atendimento'),
+                              validator: (value) =>
+                                  (value ?? '').trim().length < 3
+                                      ? 'Informe o resumo do atendimento.'
+                                      : null),
+                        ]
+                      ])))),
+      actions: [
+        TextButton(
+            onPressed: working ? null : () => Navigator.pop(context),
+            child: const Text('Fechar')),
+        if (!started)
+          FilledButton.icon(
+              onPressed: working ? null : _start,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Iniciar atendimento'))
+        else
+          FilledButton.icon(
+              onPressed: working ? null : _complete,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Concluir atendimento')),
+      ],
+    );
+  }
+}

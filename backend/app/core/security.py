@@ -5,7 +5,7 @@ import bcrypt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import select, delete
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 from app.core.config import SECRET, ALGORITHM
 from app.core.database import get_db
@@ -36,12 +36,12 @@ ROLE_PERMISSIONS = {
     ],
     "recepcao": ["appointments:read", "appointments:checkin", "queue:read"],
     "enfermagem": ["queue:read", "triage:write"],
-    "profissional": ["appointments:assigned", "queue:read", "care:update"],
+    "medico": ["appointments:assigned", "queue:read", "care:update"],
 }
 
 
 def canonical_role(role: str) -> str:
-    return "profissional" if role == "medico" else role
+    return "medico" if role == "profissional" else role
 
 
 def permissions_for(user: User) -> list[str]:
@@ -60,6 +60,18 @@ def make_token(user):
             "version": user.token_version,
             "role": canonical_role(user.perfil),
             "exp": datetime.now(timezone.utc) + timedelta(hours=8),
+        },
+        SECRET,
+        algorithm=ALGORITHM,
+    )
+
+
+def make_email_verification_token(user):
+    return jwt.encode(
+        {
+            "sub": str(user.id),
+            "purpose": "email_verification_setup",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
         },
         SECRET,
         algorithm=ALGORITHM,

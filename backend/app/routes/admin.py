@@ -5,17 +5,25 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import canonical_role, current_user, pwd, require_roles
+from app.core.security import canonical_role, pwd, require_roles
 from app.models import (
     Appointment, AppointmentStatusHistory, AuditLog, ProfessionalProfile,
     ProfessionalSchedule, ScheduleBlock, ScheduleGrid, Specialty, User,
 )
-from app.schemas import AccessReset, InternalUserCreate, InternalUserResponse, InternalUserUpdate
+from app.schemas import (
+    AccessReset,
+    DoctorCreate,
+    DoctorResponse,
+    DoctorUpdate,
+    InternalUserCreate,
+    InternalUserResponse,
+    InternalUserUpdate,
+)
 from app.services.appointments import mark_overdue_absences
 
 router = APIRouter(prefix="/admin", tags=["administração"])
@@ -32,6 +40,36 @@ def audit(db: Session, actor: User, action: str, kind: str, record_id: int | Non
 
 def mask_cpf(cpf: str) -> str:
     return f"***.***.***-{cpf[-2:]}" if len(cpf or "") == 11 else "***"
+
+
+def doctor_response(db: Session, user: User) -> DoctorResponse:
+    profile = db.scalar(
+        select(ProfessionalProfile).where(ProfessionalProfile.usuario_id == user.id)
+    )
+    return DoctorResponse(
+        id=user.id,
+        name=user.nome,
+        masked_cpf=mask_cpf(user.cpf),
+        active=user.ativo,
+        specialty=profile.especialidade.nome if profile else "Clínica Geral",
+    )
+
+
+def general_specialty(db: Session) -> Specialty:
+    specialty = db.scalar(
+        select(Specialty).where(func.lower(Specialty.nome) == "clínica geral")
+    )
+    if not specialty:
+        specialty = Specialty(nome="Clínica Geral", ativo=True)
+        db.add(specialty)
+        db.flush()
+    elif not specialty.ativo:
+        specialty.ativo = True
+    return specialty
+
+
+def technical_doctor_email(cpf: str) -> str:
+    return f"medico.{cpf}@ubs-rapida.local"
 
 
 def internal_response(db: Session, user: User) -> InternalUserResponse:
@@ -61,7 +99,7 @@ def validate_identity(name: str, cpf: str, password: str | None = None):
 
 
 def ensure_professional_fields(db: Session, role: str, registration: str | None, specialty_id: int | None):
-    if role not in {"profissional", "enfermagem"}:
+    if role not in {"medico", "enfermagem"}:
         return None
     specialty = db.get(Specialty, specialty_id) if specialty_id else None
     if not specialty or not specialty.ativo:
@@ -74,39 +112,182 @@ def list_users(q: str | None = None, role: str | None = None, active: bool | Non
                actor: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     query = select(User).where(User.perfil != "paciente")
     if q:
-        query = query.where(func.lower(User.nome).contains(q.strip().lower()))
+        term = q.strip().lower()
+        cpf = "".join(char for char in term if char.isdigit())
+        query = query.where(
+            or_(func.lower(User.nome).contains(term), User.cpf.contains(cpf) if cpf else False)
+        )
     if role:
-        values = [role] if role != "profissional" else ["profissional", "medico"]
+        values = ["profissional", "medico"] if role in {"profissional", "medico"} else [role]
         query = query.where(User.perfil.in_(values))
     if active is not None:
         query = query.where(User.ativo.is_(active))
     return [internal_response(db, row) for row in db.scalars(query.order_by(User.nome))]
 
 
+@router.get("/medicos", response_model=list[DoctorResponse])
+def list_doctors(
+    q: str | None = None,
+    active: bool | None = None,
+    actor: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    query = select(User).where(User.perfil.in_(["medico", "profissional"]))
+    if q:
+        term = q.strip().lower()
+        cpf = "".join(char for char in term if char.isdigit())
+        query = query.where(
+            or_(func.lower(User.nome).contains(term), User.cpf.contains(cpf) if cpf else False)
+        )
+    if active is not None:
+        query = query.where(User.ativo.is_(active))
+    return [doctor_response(db, row) for row in db.scalars(query.order_by(User.nome))]
+
+
+@router.post("/medicos", response_model=DoctorResponse, status_code=201)
+def create_doctor(
+    payload: DoctorCreate,
+    actor: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    cpf = validate_identity(payload.name, payload.cpf, payload.password)
+    if payload.password != payload.password_confirmation:
+        raise HTTPException(
+            422,
+            {"field": "password_confirmation", "message": "As senhas não coincidem."},
+        )
+    if db.scalar(select(User.id).where(User.cpf == cpf)):
+        raise HTTPException(409, {"field": "cpf", "message": "CPF já cadastrado."})
+    specialty = general_specialty(db)
+    user = User(
+        nome=payload.name.strip(),
+        cpf=cpf,
+        email=technical_doctor_email(cpf),
+        senha_hash=pwd.hash(payload.password),
+        perfil="medico",
+        ativo=payload.active,
+        email_verificado=True,
+        criado_por=actor.id,
+        ultima_alteracao_por=actor.id,
+    )
+    try:
+        db.add(user)
+        db.flush()
+        db.add(
+            ProfessionalProfile(
+                usuario_id=user.id,
+                registro_profissional=f"MEDICO-{cpf}",
+                especialidade_id=specialty.id,
+                autorizado_triagem=False,
+                ativo=payload.active,
+            )
+        )
+        audit(db, actor, "medico_criado", "usuario", user.id, {"ativo": payload.active})
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "CPF já cadastrado")
+    return doctor_response(db, user)
+
+
+@router.put("/medicos/{user_id}", response_model=DoctorResponse)
+def update_doctor(
+    user_id: int,
+    payload: DoctorUpdate,
+    actor: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if not user or canonical_role(user.perfil) != "medico":
+        raise HTTPException(404, "Médico não encontrado")
+    if payload.name is not None:
+        validate_identity(payload.name, user.cpf)
+        user.nome = payload.name.strip()
+    if payload.cpf is not None:
+        cpf = validate_identity(user.nome, payload.cpf)
+        if db.scalar(select(User.id).where(User.cpf == cpf, User.id != user.id)):
+            raise HTTPException(409, {"field": "cpf", "message": "CPF já cadastrado."})
+        user.cpf = cpf
+        user.email = technical_doctor_email(cpf)
+        profile = db.scalar(
+            select(ProfessionalProfile).where(ProfessionalProfile.usuario_id == user.id)
+        )
+        if profile and profile.registro_profissional.startswith("MEDICO-"):
+            profile.registro_profissional = f"MEDICO-{cpf}"
+        user.token_version += 1
+    if payload.active is not None and payload.active != user.ativo:
+        user.ativo = payload.active
+        user.token_version += 1
+        profile = db.scalar(
+            select(ProfessionalProfile).where(ProfessionalProfile.usuario_id == user.id)
+        )
+        if profile:
+            profile.ativo = payload.active
+    user.perfil = "medico"
+    user.ultima_alteracao_por = actor.id
+    audit(db, actor, "medico_alterado", "usuario", user.id, {"ativo": user.ativo})
+    try:
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "CPF já cadastrado")
+    return doctor_response(db, user)
+
+
+@router.post("/medicos/{user_id}/activate", response_model=DoctorResponse)
+def activate_doctor(
+    user_id: int,
+    actor: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if not user or canonical_role(user.perfil) != "medico":
+        raise HTTPException(404, "Médico não encontrado")
+    change_active(user_id, True, actor, db)
+    return doctor_response(db, db.get(User, user_id))
+
+
+@router.post("/medicos/{user_id}/deactivate", response_model=DoctorResponse)
+def deactivate_doctor(
+    user_id: int,
+    actor: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if not user or canonical_role(user.perfil) != "medico":
+        raise HTTPException(404, "Médico não encontrado")
+    change_active(user_id, False, actor, db)
+    return doctor_response(db, db.get(User, user_id))
+
+
 @router.post("/users", response_model=InternalUserResponse, status_code=201)
 def create_user(payload: InternalUserCreate, actor: User = Depends(require_roles("admin")),
                 db: Session = Depends(get_db)):
+    role = canonical_role(payload.role)
     cpf = validate_identity(payload.name, payload.cpf, payload.password)
     if payload.password != payload.password_confirmation:
         raise HTTPException(422, {"field": "password_confirmation", "message": "As senhas não coincidem."})
-    ensure_professional_fields(db, payload.role, payload.professional_registration, payload.specialty_id)
+    ensure_professional_fields(db, role, payload.professional_registration, payload.specialty_id)
     email = str(payload.email).strip().lower()
     if db.scalar(select(User.id).where(or_(User.cpf == cpf, func.lower(User.email) == email))):
         field = "cpf" if db.scalar(select(User.id).where(User.cpf == cpf)) else "email"
         raise HTTPException(409, {"field": field, "message": "CPF já cadastrado." if field == "cpf" else "E-mail já cadastrado."})
     user = User(nome=payload.name.strip(), cpf=cpf, email=email, senha_hash=pwd.hash(payload.password),
-                perfil=payload.role, ativo=payload.active, criado_por=actor.id, ultima_alteracao_por=actor.id)
+                perfil=role, ativo=payload.active, email_verificado=True,
+                criado_por=actor.id, ultima_alteracao_por=actor.id)
     try:
         db.add(user); db.flush()
-        if payload.role in {"profissional", "enfermagem"}:
+        if role in {"medico", "enfermagem"}:
             registration = (payload.professional_registration or "").strip() or f"SEM-REGISTRO-{user.id}"
             db.add(ProfessionalProfile(usuario_id=user.id,
                 registro_profissional=registration,
                 especialidade_id=payload.specialty_id,
-                autorizado_triagem=payload.role == "enfermagem",
+                autorizado_triagem=role == "enfermagem",
                 ativo=payload.active))
         audit(db, actor, "usuario_criado", "usuario", user.id,
-              {"perfil": payload.role, "ativo": payload.active})
+              {"perfil": role, "ativo": payload.active})
         db.commit(); db.refresh(user)
     except IntegrityError:
         db.rollback()
@@ -124,7 +305,7 @@ def update_user(user_id: int, payload: InternalUserUpdate,
         raise HTTPException(409, "O administrador não pode retirar o próprio perfil")
     if user.perfil == "admin" and payload.role:
         raise HTTPException(409, "Administradores são gerenciados pela ação protegida específica")
-    role = payload.role or canonical_role(user.perfil)
+    role = canonical_role(payload.role) if payload.role else canonical_role(user.perfil)
     if payload.name is not None:
         validate_identity(payload.name, user.cpf)
         user.nome = payload.name.strip()
@@ -134,7 +315,7 @@ def update_user(user_id: int, payload: InternalUserUpdate,
             raise HTTPException(409, {"field": "email", "message": "E-mail já cadastrado."})
         user.email = email
     profile = db.scalar(select(ProfessionalProfile).where(ProfessionalProfile.usuario_id == user.id))
-    if role in {"profissional", "enfermagem"}:
+    if role in {"medico", "enfermagem"}:
         registration = ((payload.professional_registration or "").strip()
                         or (profile.registro_profissional if profile else None)
                         or f"SEM-REGISTRO-{user.id}")
@@ -324,7 +505,34 @@ def audit_history(limit: int = Query(100, ge=1, le=500), actor: User = Depends(r
 
 
 class SpecialtyInput(BaseModel):
-    name: str = Field(min_length=3, max_length=80)
+    name: str
+
+
+def normalized_specialty_name(value: str) -> str:
+    name = " ".join(value.split())
+    if not name:
+        raise HTTPException(
+            422,
+            {"field": "name", "message": "Informe o nome da especialidade."},
+        )
+    if len(name) > 80:
+        raise HTTPException(
+            422,
+            {
+                "field": "name",
+                "message": "O nome da especialidade deve ter no máximo 80 caracteres.",
+            },
+        )
+    return name
+
+
+def specialty_name_exists(db: Session, name: str, *, except_id: int | None = None) -> bool:
+    normalized = name.casefold()
+    return any(
+        " ".join(row.nome.split()).casefold() == normalized
+        for row in db.scalars(select(Specialty))
+        if row.id != except_id
+    )
 
 
 @router.get("/specialties")
@@ -351,7 +559,8 @@ def create_admin(payload: AdminCreate, actor: User = Depends(require_roles("admi
     if db.scalar(select(User.id).where(or_(User.cpf == cpf, func.lower(User.email) == email))):
         raise HTTPException(409, "CPF ou e-mail já cadastrado")
     user = User(nome=payload.name.strip(), cpf=cpf, email=email, senha_hash=pwd.hash(payload.password),
-                perfil="admin", ativo=True, criado_por=actor.id, ultima_alteracao_por=actor.id)
+                perfil="admin", ativo=True, email_verificado=True,
+                criado_por=actor.id, ultima_alteracao_por=actor.id)
     try:
         db.add(user); db.flush()
         audit(db, actor, "administrador_criado", "usuario", user.id, {"perfil": "admin"})
@@ -363,11 +572,17 @@ def create_admin(payload: AdminCreate, actor: User = Depends(require_roles("admi
 
 @router.post("/specialties", status_code=201)
 def create_specialty(payload: SpecialtyInput, actor: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
-    name = " ".join(payload.name.split())
-    if db.scalar(select(Specialty.id).where(func.lower(Specialty.nome) == name.lower())):
+    name = normalized_specialty_name(payload.name)
+    if specialty_name_exists(db, name):
         raise HTTPException(409, "Especialidade já cadastrada")
-    row = Specialty(nome=name, ativo=True); db.add(row); db.flush()
-    audit(db, actor, "especialidade_criada", "especialidade", row.id, {"nome": name}); db.commit()
+    row = Specialty(nome=name, ativo=True)
+    try:
+        db.add(row); db.flush()
+        audit(db, actor, "especialidade_criada", "especialidade", row.id, {"nome": name})
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Especialidade já cadastrada")
     return {"id": row.id, "name": row.nome, "active": row.ativo}
 
 
@@ -376,15 +591,26 @@ def update_specialty(specialty_id: int, payload: SpecialtyInput,
                      actor: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     row = db.get(Specialty, specialty_id)
     if not row: raise HTTPException(404, "Especialidade não encontrada")
-    name = " ".join(payload.name.split())
-    if db.scalar(select(Specialty.id).where(func.lower(Specialty.nome) == name.lower(),
-                                             Specialty.id != row.id)):
+    name = normalized_specialty_name(payload.name)
+    if specialty_name_exists(db, name, except_id=row.id):
         raise HTTPException(409, "Especialidade já cadastrada")
     old = row.nome
     row.nome = name
+    # Grades e perfis mantêm o vínculo pelo id. Horários e consultas armazenam
+    # o nome para preservar o histórico, portanto precisam acompanhar a edição.
+    for schedule in db.scalars(select(ProfessionalSchedule).where(
+            func.lower(ProfessionalSchedule.especialidade) == old.lower())):
+        schedule.especialidade = name
+    for appointment in db.scalars(select(Appointment).where(
+            func.lower(Appointment.especialidade) == old.lower())):
+        appointment.especialidade = name
     audit(db, actor, "especialidade_alterada", "especialidade", row.id,
           {"nome_anterior": old, "nome_novo": name})
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Especialidade já cadastrada")
     return {"id": row.id, "name": row.nome, "active": row.ativo}
 
 
@@ -472,7 +698,7 @@ def list_grids(actor: User = Depends(require_roles("admin")), db: Session = Depe
 def create_grid(payload: GridInput, actor: User = Depends(require_roles("admin")), db: Session = Depends(get_db)):
     start, end, slots = build_slots(payload)
     professional = db.get(User, payload.professional_id); specialty = db.get(Specialty, payload.specialty_id)
-    if not professional or not professional.ativo or canonical_role(professional.perfil) != "profissional":
+    if not professional or not professional.ativo or canonical_role(professional.perfil) != "medico":
         raise HTTPException(422, "Profissional inválido")
     if not specialty or not specialty.ativo: raise HTTPException(422, "Especialidade inválida")
     overlap = db.scalar(select(ScheduleGrid.id).where(ScheduleGrid.profissional_id == professional.id,

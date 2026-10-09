@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_roles
+from app.services.appointments import (
+    legal_priority_code,
+    legal_priority_label,
+    queue_sort_key,
+)
 from app.models import (
     Appointment,
     AppointmentStatusHistory,
@@ -26,18 +31,10 @@ RISK_LABELS = {
     "medio": "Médio",
     "baixo": "Baixo",
 }
-RISK_ORDER = {"muito_alto": 0, "alto": 1, "medio": 2, "baixo": 3}
-LEGAL_PRIORITY_ORDER = {
-    "gestante": 0,
-    "idoso_60+": 1,
-    "pcd": 2,
-    "lactante": 3,
-    "geral": 4,
-}
-
-
 class RiskInput(BaseModel):
     level: Literal["muito_alto", "alto", "medio", "baixo"]
+    complaint: str = Field(min_length=3, max_length=500)
+    vital_signs: str = Field(min_length=3, max_length=500)
     observation: str | None = Field(default=None, max_length=500)
 
 
@@ -65,12 +62,15 @@ def _appointment_payload(db: Session, row: Appointment) -> dict:
         "professional": row.medico.nome,
         "professional_id": row.medico_id,
         "status": row.status,
-        "legal_priority": row.paciente.e_prioridade or "geral",
+        "legal_priority": legal_priority_code(row.paciente),
+        "priority_reason": legal_priority_label(row.paciente),
         "risk_classification": risk.nivel_risco if risk else row.classificacao_risco,
         "risk_label": RISK_LABELS.get(
             risk.nivel_risco if risk else row.classificacao_risco or ""
         ),
         "triage_observation": risk.observacao if risk else row.triagem_dados,
+        "triage_complaint": risk.queixa_principal if risk else None,
+        "vital_signs": risk.sinais_vitais if risk else None,
         "arrived_at": row.chegada_em,
         "missed_at": row.falta_em,
         "triaged_at": risk.classificado_em if risk else row.triagem_em,
@@ -288,16 +288,7 @@ def nursing_queue(
                 filtered.append(row)
         rows = filtered
 
-    def order(row: Appointment):
-        record = _risk_record(db, row.id)
-        level = record.nivel_risco if record else row.classificacao_risco
-        return (
-            RISK_ORDER.get(level or "", 4),
-            LEGAL_PRIORITY_ORDER.get(row.paciente.e_prioridade or "geral", 4),
-            row.chegada_em or row.data_horario,
-        )
-
-    return [_appointment_payload(db, row) for row in sorted(rows, key=order)]
+    return [_appointment_payload(db, row) for row in sorted(rows, key=queue_sort_key)]
 
 
 @router.get("/enfermagem/agendamentos/{appointment_id}")
@@ -330,6 +321,8 @@ def classify_risk(
     record = _risk_record(db, row.id)
     if record:
         record.nivel_risco = payload.level
+        record.queixa_principal = payload.complaint.strip()
+        record.sinais_vitais = payload.vital_signs.strip()
         record.observacao = payload.observation.strip() if payload.observation else None
         record.profissional_id = actor.id
         record.classificado_em = now
@@ -339,12 +332,20 @@ def classify_risk(
                 consulta_id=row.id,
                 profissional_id=actor.id,
                 nivel_risco=payload.level,
+                queixa_principal=payload.complaint.strip(),
+                sinais_vitais=payload.vital_signs.strip(),
                 observacao=payload.observation.strip() if payload.observation else None,
                 classificado_em=now,
             )
         )
     row.classificacao_risco = payload.level
-    row.triagem_dados = payload.observation.strip() if payload.observation else None
+    triage_parts = [
+        f"Queixa: {payload.complaint.strip()}",
+        f"Sinais vitais: {payload.vital_signs.strip()}",
+    ]
+    if payload.observation:
+        triage_parts.append(f"Observação: {payload.observation.strip()}")
+    row.triagem_dados = "\n".join(triage_parts)
     row.triagem_por = actor.id
     row.triagem_em = now
     if row.status == "em_espera":
@@ -356,19 +357,20 @@ def classify_risk(
 @router.get("/profissional/fila")
 def professional_queue(
     day: date = Query(default_factory=date.today),
-    actor: User = Depends(require_roles("profissional", "medico")),
+    actor: User = Depends(require_roles("profissional")),
     db: Session = Depends(get_db),
 ):
     query = _filtered_day_query(day, None, actor.id, None, None).where(
         Appointment.status.in_(["em_triagem", "em_atendimento"])
-    ).order_by(Appointment.data_horario)
-    return [_appointment_payload(db, row) for row in db.scalars(query).unique()]
+    )
+    rows = list(db.scalars(query).unique())
+    return [_appointment_payload(db, row) for row in sorted(rows, key=queue_sort_key)]
 
 
 @router.get("/profissional/agendamentos/{appointment_id}")
 def professional_details(
     appointment_id: int,
-    actor: User = Depends(require_roles("profissional", "medico")),
+    actor: User = Depends(require_roles("profissional")),
     db: Session = Depends(get_db),
 ):
     row = _appointment_or_404(db, appointment_id)
@@ -380,7 +382,7 @@ def professional_details(
 @router.patch("/profissional/agendamentos/{appointment_id}/chamar")
 def call_patient(
     appointment_id: int,
-    actor: User = Depends(require_roles("profissional", "medico")),
+    actor: User = Depends(require_roles("profissional")),
     db: Session = Depends(get_db),
 ):
     row = _appointment_or_404(db, appointment_id)
@@ -396,7 +398,7 @@ def call_patient(
 @router.patch("/profissional/agendamentos/{appointment_id}/iniciar-atendimento")
 def start_care(
     appointment_id: int,
-    actor: User = Depends(require_roles("profissional", "medico")),
+    actor: User = Depends(require_roles("profissional")),
     db: Session = Depends(get_db),
 ):
     row = _appointment_or_404(db, appointment_id)
@@ -415,7 +417,7 @@ def start_care(
 @router.patch("/profissional/agendamentos/{appointment_id}/concluir-atendimento")
 def complete_care(
     appointment_id: int,
-    actor: User = Depends(require_roles("profissional", "medico")),
+    actor: User = Depends(require_roles("profissional")),
     db: Session = Depends(get_db),
 ):
     row = _appointment_or_404(db, appointment_id)

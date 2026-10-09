@@ -27,12 +27,16 @@
 *.py[cod]
 **/.pytest_cache/
 **/.pytest_*/
+**/.pytest-*/
+.test-tmp/
+.superpowers/
 **/.venv/
 **/.venv-*/
 **/venv/
 **/venv_*/
 .coverage
 htmlcov/
+**/backups/
 
 # Flutter e Dart
 **/.dart_tool/
@@ -63,6 +67,6 @@ Thumbs.db
 output/
 tmp/
 frontend/test-renders/
-docs/documentacao_projeto/referencias/anotacoes_estudo_banco_de_dados.txt
+docs/99_arquivo_historico/acervo_documentacao_projeto/referencias/anotacoes_estudo_banco_de_dados.txt
 *.zip
 *.7z

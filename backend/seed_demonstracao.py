@@ -30,9 +30,9 @@ class DemoAccount:
 DEMO_ACCOUNTS = (
     DemoAccount("admin", "Ana Administração Fictícia", "12345678909", "Admin@123", "admin.demo@ubs-rapida.local"),
     DemoAccount("recepcao", "Rita Recepção Fictícia", "98765432100", "Recepcao@123", "recepcao.demo@ubs-rapida.local"),
-    DemoAccount("enfermagem", "Enf. Helena Triagem Fictícia", "39053344705", "Enfermagem@123", "enfermagem.demo@ubs-rapida.local", "Clínica Geral", "COREN-DEMO-001"),
-    DemoAccount("profissional", "Dr. Paulo Clínica Fictício", "11144477735", "Profissional@123", "clinica.demo@ubs-rapida.local", "Clínica Geral", "CRM-DEMO-001"),
-    DemoAccount("profissional", "Dra. Lívia Pediatria Fictícia", "16899535009", "Pediatria@123", "pediatria.demo@ubs-rapida.local", "Pediatria", "CRM-DEMO-002"),
+    DemoAccount("enfermagem", "Enf. Helena Triagem Fictícia", "45678912364", "Enfermagem@123", "enfermagem.demo@ubs-rapida.local", "Clínica Geral", "COREN-DEMO-001"),
+    DemoAccount("medico", "Dr. Victor Almeida", "39053344705", "Medico@123", "victor.medico@ubs-rapida.local", "Clínica Geral", "CRM-DEMO-001"),
+    DemoAccount("medico", "Dra. Lívia Pediatria Fictícia", "16899535009", "Pediatria@123", "pediatria.demo@ubs-rapida.local", "Pediatria", "CRM-DEMO-002"),
     DemoAccount("paciente", "Paciente Demonstração", "52998224725", "Paciente@123", "paciente.demo@ubs-rapida.local"),
 )
 
@@ -106,6 +106,7 @@ def ensure_demo_accounts() -> list[tuple[DemoAccount, str]]:
                     nome=account.name, cpf=account.cpf,
                     email=_available_email(db, account.email, account.cpf),
                     senha_hash=pwd.hash(account.password), perfil=account.role, ativo=True,
+                    email_verificado=True,
                     data_nascimento=datetime(1990, 1, 1) if account.role == "paciente" else None,
                     e_prioridade="geral" if account.role == "paciente" else None,
                     e_menor_idade=False,
@@ -128,7 +129,7 @@ def ensure_demo_accounts() -> list[tuple[DemoAccount, str]]:
 def ensure_demo_schedules() -> int:
     created = 0
     with SessionLocal() as db:
-        for account in (item for item in DEMO_ACCOUNTS if item.role == "profissional"):
+        for account in (item for item in DEMO_ACCOUNTS if item.role == "medico"):
             user = db.scalar(select(User).where(User.cpf == account.cpf))
             if not user:
                 continue
@@ -154,9 +155,9 @@ def ensure_demo_workflow() -> list[tuple[WorkflowCase, str]]:
     results: list[tuple[WorkflowCase, str]] = []
     with SessionLocal() as db:
         reception = db.scalar(select(User).where(User.cpf == "98765432100"))
-        nurse = db.scalar(select(User).where(User.cpf == "39053344705"))
+        nurse = db.scalar(select(User).where(User.cpf == "45678912364"))
         professionals = {
-            "Clínica Geral": db.scalar(select(User).where(User.cpf == "11144477735")),
+            "Clínica Geral": db.scalar(select(User).where(User.cpf == "39053344705")),
             "Pediatria": db.scalar(select(User).where(User.cpf == "16899535009")),
         }
         if not reception or not nurse or any(value is None for value in professionals.values()):
@@ -170,6 +171,7 @@ def ensure_demo_workflow() -> list[tuple[WorkflowCase, str]]:
                     nome=case.name, cpf=case.cpf,
                     email=_available_email(db, f"paciente.fluxo{index}@ubs-rapida.local", case.cpf),
                     senha_hash=pwd.hash("PacienteFluxo@123"), perfil="paciente", ativo=True,
+                    email_verificado=True,
                     data_nascimento=datetime(1985, 1, index),
                     e_prioridade="idoso_60+" if index == 5 else "geral",
                     e_menor_idade=False,
@@ -197,13 +199,26 @@ def ensure_demo_workflow() -> list[tuple[WorkflowCase, str]]:
                 chamado_em=scheduled_at if case.status in {"em_atendimento", "concluido"} else None,
                 iniciado_em=scheduled_at if case.status in {"em_atendimento", "concluido"} else None,
                 concluido_em=scheduled_at + timedelta(minutes=30) if case.status == "concluido" else None,
+                atendimento_medico_id=(
+                    professionals[case.specialty].id
+                    if case.status in {"em_atendimento", "concluido"}
+                    else None
+                ),
+                resumo_atendimento=(
+                    "Resumo fictício do atendimento concluído."
+                    if case.status == "concluido"
+                    else None
+                ),
             )
             db.add(row)
             db.flush()
             if case.risk:
                 db.add(RiskClassification(
                     consulta_id=row.id, profissional_id=nurse.id,
-                    nivel_risco=case.risk, observacao=row.triagem_dados,
+                    nivel_risco=case.risk,
+                    queixa_principal="Queixa principal fictícia.",
+                    sinais_vitais="Sinais vitais fictícios estáveis.",
+                    observacao=row.triagem_dados,
                     classificado_em=triaged_at,
                 ))
             if case.rescheduled:
@@ -220,7 +235,7 @@ def main() -> int:
     try:
         print("Contas fictícias de demonstração:")
         for account, status in ensure_demo_accounts():
-            print(f"- {account.role}: {account.name} | CPF {account.cpf} | senha {account.password} | {status}.")
+            print(f"- {account.role}: {account.name} | CPF {account.cpf} | {status}.")
         print(f"Horários futuros criados: {ensure_demo_schedules()} (depois, somente os ausentes).")
         print("Cenários fictícios:")
         for case, status in ensure_demo_workflow():

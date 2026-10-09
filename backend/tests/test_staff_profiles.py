@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 
@@ -148,7 +148,12 @@ def test_nursing_manual_risk_and_complete_workflow(client):
     classified = client.patch(
         f"/enfermagem/agendamentos/{appointment_id}/classificacao-risco",
         headers=nurse,
-        json={"level": "alto", "observation": "Observação fictícia curta."},
+        json={
+            "level": "alto",
+            "complaint": "Dor de cabeça fictícia.",
+            "vital_signs": "PA 120/80; temperatura 36,5 °C.",
+            "observation": "Observação fictícia curta.",
+        },
     )
     assert classified.status_code == 200
     assert classified.json()["status"] == "em_triagem"
@@ -156,7 +161,11 @@ def test_nursing_manual_risk_and_complete_workflow(client):
     assert client.patch(
         f"/enfermagem/agendamentos/{appointment_id}/classificacao-risco",
         headers=professional,
-        json={"level": "baixo"},
+        json={
+            "level": "baixo",
+            "complaint": "Queixa fictícia.",
+            "vital_signs": "PA fictícia 120/80.",
+        },
     ).status_code == 403
     assert client.patch(
         f"/profissional/agendamentos/{appointment_id}/iniciar-atendimento",
@@ -199,6 +208,68 @@ def test_nursing_manual_risk_and_complete_workflow(client):
         assert appointment.status == "concluido"
         assert appointment.iniciado_em and appointment.concluido_em
         assert risk.nivel_risco == "alto"
+        assert risk.queixa_principal == "Dor de cabeça fictícia."
+        assert risk.sinais_vitais == "PA 120/80; temperatura 36,5 °C."
+
+
+def test_queue_orders_risk_legal_priority_and_arrival(client):
+    _setup_staff_data()
+    now = datetime.now()
+    with SessionLocal() as db:
+        professional = db.scalar(select(User).where(User.perfil == "profissional"))
+        cases = [
+            ("Risco Máximo", "geral", None, "muito_alto", 1),
+            ("Pessoa Idosa", "geral", datetime(1950, 1, 1), "alto", 2),
+            ("Pessoa PCD", "pcd", None, "alto", 3),
+            ("Pessoa Gestante", "gestante", None, "alto", 4),
+            ("Pessoa Lactante", "lactante", None, "alto", 5),
+            ("Prioridade Geral", "geral", None, "alto", 10),
+        ]
+        hours = [7, 8, 9, 11, 13, 14]
+        for index, (name, priority, birth, risk_level, minutes) in enumerate(cases):
+            patient = User(
+                nome=name,
+                cpf=f"80000000{index:03d}",
+                email=f"fila{index}@example.com",
+                senha_hash=pwd.hash("Paciente@123"),
+                perfil="paciente",
+                ativo=True,
+                e_prioridade=priority,
+                data_nascimento=birth,
+            )
+            db.add(patient)
+            db.flush()
+            appointment = Appointment(
+                paciente_id=patient.id,
+                medico_id=professional.id,
+                especialidade="Clínica Geral",
+                data_horario=now.replace(
+                    hour=hours[index], minute=0, second=0, microsecond=0
+                ),
+                status="em_triagem",
+                classificacao_risco=risk_level,
+                chegada_em=now - timedelta(minutes=minutes),
+            )
+            db.add(appointment)
+            db.flush()
+            db.add(
+                RiskClassification(
+                    consulta_id=appointment.id,
+                    profissional_id=professional.id,
+                    nivel_risco=risk_level,
+                    queixa_principal="Queixa fictícia.",
+                    sinais_vitais="Sinais vitais fictícios.",
+                )
+            )
+        db.commit()
+
+    professional_headers = _login(client, "11144477735", "Profissional@123")
+    response = client.get("/profissional/fila", headers=professional_headers)
+    assert response.status_code == 200
+    rows = response.json()
+    assert [row["patient"] for row in rows] == [case[0] for case in cases]
+    assert rows[1]["priority_reason"] == "Pessoa idosa (60 anos ou mais)"
+    assert rows[2]["priority_reason"] == "Pessoa com deficiência (PCD)"
 
 
 def test_health_professional_cannot_use_nursing_routes(client):

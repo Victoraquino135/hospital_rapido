@@ -22,7 +22,9 @@ class _StaffDashboardState extends State<StaffDashboard> {
 
   bool get isReception => ApiService.session?.role == 'recepcao';
   bool get isNursing => ApiService.session?.role == 'enfermagem';
-  bool get isProfessional => ApiService.session?.role == 'profissional';
+  bool get isProfessional =>
+      ApiService.session?.role == 'medico' ||
+      ApiService.session?.role == 'profissional';
 
   @override
   void initState() {
@@ -500,8 +502,7 @@ class _StaffDashboardState extends State<StaffDashboard> {
       });
 
   Widget _dropdown(String label, String? value, List<(String, String)> values,
-          ValueChanged<String?> changed,
-          {Key? key}) =>
+          ValueChanged<String?> changed, {Key? key}) =>
       SizedBox(
           width: 210,
           child: DropdownButtonFormField<String>(
@@ -523,35 +524,57 @@ class _StaffDashboardState extends State<StaffDashboard> {
   Widget _itemCard(AdminAppointment item) => Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Card(
+          key: Key('staff-appointment-card-${item.id}'),
           child: Padding(
-              padding: const EdgeInsets.all(15),
+              padding: const EdgeInsets.all(AppSpacing.md),
               child: LayoutBuilder(builder: (_, constraints) {
                 final info = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(item.patient,
-                          style: const TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.w800)),
-                      Text(
-                          '${item.patientDocument} • ${item.specialty} • ${item.professional}'),
-                      Wrap(spacing: 8, runSpacing: 6, children: [
-                        Text(showDate(item.scheduledAt)),
-                        AppStatusBadge(
-                            label: statusLabel(item.status),
-                            tone: statusToneFor(item.status),
-                            semanticLabel:
-                                'Situação: ${statusLabel(item.status)}'),
-                      ]),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: AppSpacing.sm),
+                      _careInformationLine(
+                          Icons.badge_outlined, item.patientDocument),
+                      _careInformationLine(Icons.medical_information_outlined,
+                          'Especialidade: ${item.specialty}'),
+                      _careInformationLine(Icons.person_outline,
+                          'Profissional: ${item.professional}'),
+                      const SizedBox(height: AppSpacing.xs),
+                      Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            Text('Horário: ${showDate(item.scheduledAt)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800)),
+                            AppStatusBadge(
+                                label: statusLabel(item.status),
+                                tone: statusToneFor(item.status),
+                                semanticLabel:
+                                    'Situação: ${statusLabel(item.status)}'),
+                          ]),
                       if (item.arrivedAt != null)
-                        Text('Chegada: ${showDate(item.arrivedAt!)}'),
+                        Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.xs),
+                            child: Text('Chegada: ${showDate(item.arrivedAt!)}',
+                                style: Theme.of(context).textTheme.bodyLarge)),
                       Text('Prioridade: ${item.priorityReason}',
-                          style: TextStyle(
-                              fontWeight: item.legalPriority == 'geral'
-                                  ? FontWeight.normal
-                                  : FontWeight.w700,
-                              color: item.legalPriority == 'geral'
-                                  ? null
-                                  : green)),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyLarge
+                              ?.copyWith(
+                                  fontWeight: item.legalPriority == 'geral'
+                                      ? FontWeight.normal
+                                      : FontWeight.w700,
+                                  color: item.legalPriority == 'geral'
+                                      ? null
+                                      : green)),
                       if (item.riskLabel != null)
                         Semantics(
                             label: 'Nível de risco: ${item.riskLabel}',
@@ -575,58 +598,92 @@ class _StaffDashboardState extends State<StaffDashboard> {
                             style: TextStyle(fontWeight: FontWeight.w700)),
                       ],
                     ]);
-                final actions = Wrap(spacing: 8, runSpacing: 8, children: [
-                  OutlinedButton.icon(
-                      onPressed: () => _details(item),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Detalhes')),
-                  if (isReception && item.status == 'agendado')
-                    AppActionButton(
-                        onPressed: working ? null : () => _checkIn(item),
-                        icon: Icons.how_to_reg,
-                        label: 'Check-in'),
-                  if (isReception &&
-                      const {'agendado', 'em_espera'}.contains(item.status))
-                    OutlinedButton.icon(
-                        onPressed: working ? null : () => _absence(item),
-                        icon: const Icon(Icons.person_off_outlined),
-                        label: const Text('Não compareceu')),
-                  if (isNursing &&
-                      const {'em_espera', 'em_triagem'}.contains(item.status))
-                    AppActionButton(
-                        onPressed: working ? null : () => _classify(item),
-                        icon: Icons.flag_outlined,
-                        label: item.status == 'em_triagem'
-                            ? 'Reclassificar risco'
-                            : 'Classificar risco'),
-                  if (isProfessional && item.status == 'em_triagem')
-                    OutlinedButton.icon(
-                        onPressed: working ? null : () => _call(item),
-                        icon: const Icon(Icons.campaign_outlined),
-                        label: Text(item.calledAt == null
-                            ? 'Chamar paciente'
-                            : 'Chamar novamente')),
-                  if (isProfessional && item.status == 'em_triagem')
-                    AppActionButton(
-                        onPressed: working ? null : () => _start(item),
-                        icon: Icons.play_arrow,
-                        label: 'Iniciar atendimento'),
-                  if (isProfessional && item.status == 'em_atendimento')
-                    AppActionButton(
-                        onPressed: working ? null : () => _complete(item),
-                        icon: Icons.task_alt,
-                        label: 'Concluir atendimento'),
-                ]);
+                final detailsButton = OutlinedButton.icon(
+                    key: Key('staff-details-button-${item.id}'),
+                    onPressed: () => _details(item),
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('Detalhes'));
+                final operationalActions = Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      if (isReception && item.status == 'agendado')
+                        AppActionButton(
+                            onPressed: working ? null : () => _checkIn(item),
+                            icon: Icons.how_to_reg,
+                            label: 'Check-in'),
+                      if (isReception &&
+                          const {'agendado', 'em_espera'}.contains(item.status))
+                        OutlinedButton.icon(
+                            onPressed: working ? null : () => _absence(item),
+                            icon: const Icon(Icons.person_off_outlined),
+                            label: const Text('Não compareceu')),
+                      if (isNursing &&
+                          const {'em_espera', 'em_triagem'}
+                              .contains(item.status))
+                        AppActionButton(
+                            onPressed: working ? null : () => _classify(item),
+                            icon: Icons.flag_outlined,
+                            label: item.status == 'em_triagem'
+                                ? 'Reclassificar risco'
+                                : 'Classificar risco'),
+                      if (isProfessional && item.status == 'em_triagem')
+                        OutlinedButton.icon(
+                            onPressed: working ? null : () => _call(item),
+                            icon: const Icon(Icons.campaign_outlined),
+                            label: Text(item.calledAt == null
+                                ? 'Chamar paciente'
+                                : 'Chamar novamente')),
+                      if (isProfessional && item.status == 'em_triagem')
+                        AppActionButton(
+                            onPressed: working ? null : () => _start(item),
+                            icon: Icons.play_arrow,
+                            label: 'Iniciar atendimento'),
+                      if (isProfessional && item.status == 'em_atendimento')
+                        AppActionButton(
+                            onPressed: working ? null : () => _complete(item),
+                            icon: Icons.task_alt,
+                            label: 'Concluir atendimento'),
+                    ]);
+                final trailing = Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      detailsButton,
+                      if (operationalActions.children.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        operationalActions,
+                      ],
+                    ]);
                 return constraints.maxWidth < 760
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [info, const SizedBox(height: 12), actions])
-                    : Row(children: [
-                        Expanded(child: info),
-                        const SizedBox(width: 12),
-                        Flexible(child: actions)
-                      ]);
+                        children: [
+                            info,
+                            const SizedBox(height: AppSpacing.md),
+                            Align(
+                                alignment: Alignment.centerRight,
+                                child: trailing),
+                          ])
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                            Expanded(child: info),
+                            const SizedBox(width: AppSpacing.lg),
+                            trailing
+                          ]);
               }))));
+
+  Widget _careInformationLine(IconData icon, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, size: 20, color: accessibility.highContrast ? null : blue),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+              child: Text(value, style: Theme.of(context).textTheme.bodyLarge)),
+        ]),
+      );
 }
 
 String _riskLabel(String value) =>

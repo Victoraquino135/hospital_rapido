@@ -16,6 +16,7 @@ part 'widgets/shared_widgets.dart';
 part 'widgets/password_rules.dart';
 part 'screens/dashboards.dart';
 part 'screens/staff_dashboard.dart';
+part 'screens/medical_dashboard.dart';
 part 'screens/admin_dashboard.dart';
 part 'screens/auth_pages.dart';
 part 'screens/email_verification_page.dart';
@@ -93,7 +94,8 @@ class UbsApp extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12)))),
                 textButtonTheme:
                     TextButtonThemeData(style: TextButton.styleFrom(minimumSize: const Size(AppSizes.minTouchTarget, AppSizes.minTouchTarget), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))),
-                textTheme: TextTheme(bodyLarge: TextStyle(color: fg), bodyMedium: TextStyle(color: fg), titleLarge: TextStyle(color: fg), titleMedium: TextStyle(color: fg)),
+                iconButtonTheme: const IconButtonThemeData(style: ButtonStyle(minimumSize: WidgetStatePropertyAll(Size.square(AppSizes.minTouchTarget)))),
+                textTheme: TextTheme(bodyLarge: TextStyle(color: fg), bodyMedium: TextStyle(color: fg, fontSize: 16), bodySmall: TextStyle(color: fg, fontSize: 14), titleLarge: TextStyle(color: fg), titleMedium: TextStyle(color: fg, fontSize: 18), labelLarge: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: contrast ? Colors.black : Colors.white, labelStyle: TextStyle(color: fg), hintStyle: TextStyle(color: contrast ? Colors.white : Colors.grey), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: contrast ? Colors.yellow : Colors.grey, width: contrast ? 3 : 1)), focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: contrast ? Colors.white : blue, width: 3))),
                 snackBarTheme: contrast ? const SnackBarThemeData(backgroundColor: Colors.yellow, contentTextStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w700), actionTextColor: Colors.black) : const SnackBarThemeData(),
                 navigationBarTheme: contrast ? const NavigationBarThemeData(backgroundColor: Colors.black, indicatorColor: Colors.yellow, iconTheme: WidgetStatePropertyAll(IconThemeData(color: Colors.white)), labelTextStyle: WidgetStatePropertyAll(TextStyle(color: Colors.white))) : const NavigationBarThemeData()),
@@ -107,7 +109,8 @@ Widget homeForRole() => switch (ApiService.session!.role) {
       'admin' => const AdminDashboard(),
       'recepcao' => const StaffDashboard(),
       'enfermagem' => const StaffDashboard(),
-      'profissional' => const StaffDashboard(),
+      'medico' => const MedicalDashboard(),
+      'profissional' => const MedicalDashboard(),
       _ => const LoginPage(),
     };
 

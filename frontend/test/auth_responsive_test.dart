@@ -39,7 +39,11 @@ void main() {
   testWidgets('login_matches_compact_and_wide_hierarchy', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    for (final size in [const Size(360, 800), const Size(1280, 900)]) {
+    for (final size in [
+      const Size(390, 800),
+      const Size(768, 900),
+      const Size(1280, 900),
+    ]) {
       await setViewport(tester, size);
       await tester.pumpWidget(const UbsApp(home: LoginPage()));
       expect(find.bySemanticsLabel('UBS Rápida, saúde perto de você'),
@@ -50,10 +54,10 @@ void main() {
     }
   });
 
-  testWidgets('registration_wraps_at_360_with_max_text_scale', (tester) async {
+  testWidgets('registration_wraps_at_390_with_max_text_scale', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await setViewport(tester, const Size(360, 800));
+    await setViewport(tester, const Size(390, 800));
     accessibility.fontSizeScale = 1.30;
     await tester.pumpWidget(const UbsApp(home: RegisterPage()));
     await tester.pump();
@@ -65,7 +69,7 @@ void main() {
   testWidgets('recovery_keeps_primary_action_visible', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await setViewport(tester, const Size(360, 800));
+    await setViewport(tester, const Size(390, 800));
     await tester.pumpWidget(const UbsApp(home: RecoveryPage()));
 
     final action = find.byType(AppActionButton);
@@ -77,7 +81,7 @@ void main() {
   testWidgets('email_verification_keeps_code_semantics', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await setViewport(tester, const Size(360, 800));
+    await setViewport(tester, const Size(390, 800));
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(const UbsApp(
       home: EmailVerificationPage(

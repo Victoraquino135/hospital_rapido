@@ -27,6 +27,7 @@ if __name__ == '__main__':
     with SessionLocal() as db:
         if db.scalar(select(User).where((User.cpf == cpf) | (User.email == email))):
             raise SystemExit('CPF ou e-mail já cadastrado; nada foi alterado.')
-        db.add(User(nome=name, cpf=cpf, email=email, senha_hash=pwd.hash(password), perfil=args.role))
+        db.add(User(nome=name, cpf=cpf, email=email, senha_hash=pwd.hash(password),
+                    perfil=args.role, email_verificado=True))
         db.commit()
     print('Cadastro da equipe concluído.')

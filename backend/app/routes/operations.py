@@ -61,7 +61,7 @@ def schedules(user=Depends(require_roles('admin')), db: Session = Depends(get_db
 def validate_schedule(payload, db):
     from app.routes.admin import is_holiday
     professional = db.get(User, payload.doctor_id)
-    if not professional or not professional.ativo or canonical_role(professional.perfil) != 'profissional':
+    if not professional or not professional.ativo or canonical_role(professional.perfil) != 'medico':
         raise HTTPException(422, 'Profissional inválido')
     if payload.scheduled_at.tzinfo or payload.scheduled_at <= datetime.now():
         raise HTTPException(422, 'Informe uma data local futura')
@@ -108,7 +108,7 @@ def change_status(appointment_id: int, payload: StatusInput, user=Depends(requir
     role = canonical_role(user.perfil)
     authorized = ((payload.status in {'em_espera', 'falta'} and role in {'recepcao', 'admin'}) or
                   (payload.status == 'em_triagem' and role == 'enfermagem') or
-                  (payload.status in {'em_atendimento', 'concluido'} and role == 'profissional' and row.medico_id == user.id))
+                  False)
     if not authorized:
         raise HTTPException(403, 'Perfil não autorizado para esta etapa')
     if row.status not in previous: raise HTTPException(409, 'Transição de status inválida')

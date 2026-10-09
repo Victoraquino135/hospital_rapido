@@ -102,6 +102,8 @@ class _LoginPageState extends State<LoginPage> {
                         onPressed: () => Navigator.push(
                             context,
                             MaterialPageRoute(
+                                settings:
+                                    const RouteSettings(name: '/register'),
                                 builder: (_) => const RegisterPage())),
                         icon: const Icon(Icons.person_add_alt_1),
                         label: const Text('Cadastrar-se'))
@@ -193,9 +195,10 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => busy = true);
     try {
       await ApiService().register(data);
+      await ApiService().login(digits(cpf.text), password.text);
       if (mounted) {
-        notice(context, 'Cadastro realizado. Entre com suas credenciais.');
-        Navigator.pop(context);
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => homeForRole()), (_) => false);
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -424,9 +427,11 @@ class _ResponsiblePageState extends State<ResponsiblePage> {
         'guardian_phone': digits(phone.text),
         'guardian_email': email.text.trim().isEmpty ? null : email.text.trim()
       });
+      await ApiService().login(widget.patientData['cpf'].toString(),
+          widget.patientData['password'].toString());
       if (mounted) {
-        notice(context, 'Cadastro realizado. Entre com suas credenciais.');
-        Navigator.popUntil(context, (route) => route.isFirst);
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => homeForRole()), (_) => false);
       }
     } on ApiException catch (e) {
       if (mounted) {

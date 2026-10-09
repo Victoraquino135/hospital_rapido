@@ -46,48 +46,70 @@ class ResponsiveAppShell extends StatelessWidget {
         ? WideNavigationMode.contentOnly
         : wideNavigationMode;
     if (mode == WideNavigationMode.overlayDrawer) {
-      return _content(context, showBrand: true, showMenuButton: true);
+      return Stack(
+        children: [
+          _content(context, showBrand: true),
+          Positioned(
+            top: AppSpacing.sm,
+            left: AppSpacing.md,
+            child: Semantics(
+              button: true,
+              label: 'Abrir menu de navegação',
+              child: IconButton.filledTonal(
+                key: const Key('wide-navigation-menu-button'),
+                tooltip: 'Abrir menu de navegação',
+                constraints: const BoxConstraints.tightFor(
+                  width: AppSizes.minTouchTarget,
+                  height: AppSizes.minTouchTarget,
+                ),
+                onPressed: () => _showWideNavigation(context),
+                icon: const Icon(Icons.menu),
+              ),
+            ),
+          ),
+        ],
+      );
     }
     if (mode == WideNavigationMode.contentOnly) {
       return _content(context, showBrand: true);
     }
     return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 260,
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.md),
-            color: accessibility.highContrast
-                ? Colors.black
-                : Theme.of(context).colorScheme.surface,
-            child: Column(
-              children: [
-                const BrandMark(compact: true),
-                const SizedBox(height: AppSpacing.lg),
-                if (destinations.isNotEmpty)
-                  Expanded(
-                    child: NavigationRail(
-                      extended: true,
-                      scrollable: true,
-                      backgroundColor: Colors.transparent,
-                      selectedIndex: selectedIndex,
-                      onDestinationSelected: onDestinationSelected,
-                      destinations: [
-                        for (final destination in destinations)
-                          NavigationRailDestination(
-                            icon: Icon(destination.icon),
-                            label: Text(destination.label),
-                          ),
-                      ],
-                    ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: 260,
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.md),
+          color: accessibility.highContrast
+              ? Colors.black
+              : Theme.of(context).colorScheme.surface,
+          child: Column(
+            children: [
+              const BrandMark(compact: true),
+              const SizedBox(height: AppSpacing.lg),
+              if (destinations.isNotEmpty)
+                Expanded(
+                  child: NavigationRail(
+                    extended: true,
+                    scrollable: true,
+                    backgroundColor: Colors.transparent,
+                    selectedIndex: selectedIndex,
+                    onDestinationSelected: onDestinationSelected,
+                    destinations: [
+                      for (final destination in destinations)
+                        NavigationRailDestination(
+                          icon: Icon(destination.icon),
+                          label: Text(destination.label),
+                        ),
+                    ],
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-          Expanded(child: _content(context, showBrand: false)),
-        ],
-      );
+        ),
+        Expanded(child: _content(context, showBrand: false)),
+      ],
+    );
   }
 
   Future<void> _showWideNavigation(BuildContext context) async {
@@ -207,9 +229,7 @@ class ResponsiveAppShell extends StatelessWidget {
         ],
       );
 
-  Widget _content(BuildContext context,
-          {required bool showBrand, bool showMenuButton = false}) =>
-      Center(
+  Widget _content(BuildContext context, {required bool showBrand}) => Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: AppSizes.contentMaxWidth),
           child: Padding(
@@ -219,16 +239,7 @@ class ResponsiveAppShell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (showBrand) ...[
-                  Row(children: [
-                    const Expanded(child: BrandMark(compact: true)),
-                    if (showMenuButton)
-                      IconButton.filledTonal(
-                        key: const Key('wide-navigation-menu-button'),
-                        tooltip: 'Abrir menu de navegação',
-                        onPressed: () => _showWideNavigation(context),
-                        icon: const Icon(Icons.menu),
-                      ),
-                  ]),
+                  const BrandMark(compact: true),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 ResponsivePageHeader(

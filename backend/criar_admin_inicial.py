@@ -36,7 +36,7 @@ def create_initial_admin(name: str, cpf_value: str, email_value: str, password: 
         if db.scalar(select(User.id).where(or_(User.cpf == cpf, func.lower(User.email) == email))):
             raise ValueError("CPF ou e-mail já cadastrado. Nenhum registro foi alterado.")
         user = User(nome=name, cpf=cpf, email=email, senha_hash=pwd.hash(password),
-                    perfil="admin", ativo=True)
+                    perfil="admin", ativo=True, email_verificado=True)
         try:
             db.add(user); db.commit(); db.refresh(user)
         except IntegrityError as exc:

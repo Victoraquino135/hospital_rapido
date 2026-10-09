@@ -31,11 +31,43 @@ class TokenResponse(BaseModel):
     permissions: list[str] = []
 
 
+class MedicalCompletion(BaseModel):
+    summary: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def trim_summary(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class MedicalCareResponse(BaseModel):
+    id: int
+    scheduled_at: datetime
+    patient: str
+    age: int | None = None
+    specialty: str
+    professional: str
+    professional_id: int
+    status: str
+    legal_priority: str
+    priority_reason: str
+    risk_classification: str
+    risk_label: str
+    triage_complaint: str
+    vital_signs: str
+    triage_observation: str | None = None
+    arrived_at: datetime
+    triaged_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    care_summary: str | None = None
+
+
 class InternalUserCreate(BaseModel):
     name: str = Field(min_length=3, max_length=80)
     cpf: str = Field(min_length=11, max_length=32)
     email: EmailStr
-    role: Literal["recepcao", "enfermagem", "profissional"]
+    role: Literal["recepcao", "enfermagem", "medico", "profissional"]
     password: str = Field(min_length=8, max_length=128)
     password_confirmation: str = Field(min_length=8, max_length=128)
     active: bool = True
@@ -47,7 +79,7 @@ class InternalUserCreate(BaseModel):
 class InternalUserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=3, max_length=80)
     email: EmailStr | None = None
-    role: Literal["recepcao", "enfermagem", "profissional"] | None = None
+    role: Literal["recepcao", "enfermagem", "medico", "profissional"] | None = None
     professional_registration: str | None = Field(default=None, max_length=40)
     specialty_id: int | None = None
     can_triage: bool | None = None
@@ -71,6 +103,29 @@ class InternalUserResponse(BaseModel):
     can_triage: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class DoctorCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=80)
+    cpf: str = Field(min_length=11, max_length=32)
+    password: str = Field(min_length=8, max_length=128)
+    password_confirmation: str = Field(min_length=8, max_length=128)
+    active: bool = True
+
+
+class DoctorUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=80)
+    cpf: str | None = Field(default=None, min_length=11, max_length=32)
+    active: bool | None = None
+
+
+class DoctorResponse(BaseModel):
+    id: int
+    name: str
+    masked_cpf: str
+    role: Literal["medico"] = "medico"
+    active: bool
+    specialty: str = "Clínica Geral"
 
 
 class PatientRegistration(BaseModel):
@@ -132,6 +187,29 @@ class EmailPasswordRecoveryRequest(BaseModel):
 
 class EmailPasswordRecoveryVerify(EmailPasswordRecoveryRequest):
     code: str = Field(pattern=r"^[0-9]{6}$")
+
+
+class EmailVerificationRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+class EmailVerificationConfirm(EmailVerificationRequest):
+    code: str = Field(pattern=r"^[0-9]{6}$")
+
+
+class EmailVerificationCorrection(BaseModel):
+    verification_token: str = Field(min_length=1)
+    new_email: EmailStr
+
+    @field_validator("new_email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class EmailPasswordReset(BaseModel):

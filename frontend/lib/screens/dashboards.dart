@@ -528,25 +528,10 @@ class _PatientDashboardState extends State<PatientDashboard> {
         Text(message, textAlign: TextAlign.center)
       ]));
 
-  Widget _shellActions() {
-    final book = AppActionButton(
-        label: 'Agendar consulta',
-        icon: Icons.add_circle_outline,
-        onPressed: () => openBooking(),
-        expand: screenClassOf(context) == ScreenClass.compact);
-    final exit = OutlinedButton.icon(
-        onPressed: logout,
-        icon: const Icon(Icons.logout, size: 18),
-        label: const Text('Sair'));
-    if (screenClassOf(context) == ScreenClass.compact) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        book,
-        const SizedBox(height: 8),
-        exit,
-      ]);
-    }
-    return Wrap(spacing: 8, runSpacing: 8, children: [book, exit]);
-  }
+  Widget _shellActions() => OutlinedButton.icon(
+      onPressed: logout,
+      icon: const Icon(Icons.logout, size: 18),
+      label: const Text('Sair'));
 
   Widget _profileField(
           double width, IconData icon, String label, String value) =>

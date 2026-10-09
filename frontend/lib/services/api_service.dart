@@ -346,6 +346,48 @@ class ApiService {
         'PATCH', '/profissional/agendamentos/$id/concluir-atendimento', {});
   }
 
+  Future<List<MedicalAppointment>> medicalQueue() async =>
+      _list(await _request('GET', '/medico/fila'))
+          .map(MedicalAppointment.fromJson)
+          .toList();
+
+  Future<MedicalAppointment> medicalDetails(int id) async =>
+      MedicalAppointment.fromJson(
+          jsonDecode((await _request('GET', '/medico/atendimentos/$id')).body));
+
+  Future<MedicalAppointment> startMedicalCare(int id) async =>
+      MedicalAppointment.fromJson(jsonDecode(
+          (await _request('PATCH', '/medico/atendimentos/$id/iniciar', {}))
+              .body));
+
+  Future<MedicalAppointment> completeMedicalCare(
+          int id, String summary) async =>
+      MedicalAppointment.fromJson(jsonDecode((await _request('PATCH',
+              '/medico/atendimentos/$id/concluir', {'summary': summary.trim()}))
+          .body));
+
+  Future<List<DoctorAccount>> doctors({String? search, bool? active}) async {
+    final query = <String, String>{
+      if (search?.trim().isNotEmpty ?? false) 'q': search!.trim(),
+      if (active != null) 'active': active.toString(),
+    };
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    return _list(await _request('GET', '/admin/medicos$suffix'))
+        .map(DoctorAccount.fromJson)
+        .toList();
+  }
+
+  Future<DoctorAccount> createDoctor(Map<String, dynamic> data) async =>
+      DoctorAccount.fromJson(await _post('/admin/medicos', data));
+
+  Future<DoctorAccount> updateDoctor(int id, Map<String, dynamic> data) async =>
+      DoctorAccount.fromJson(
+          jsonDecode((await _request('PUT', '/admin/medicos/$id', data)).body));
+
+  Future<DoctorAccount> setDoctorActive(int id, bool active) async =>
+      DoctorAccount.fromJson(await _post(
+          '/admin/medicos/$id/${active ? 'activate' : 'deactivate'}', {}));
+
   Future<List<AdminAppointment>> professionalQueue([DateTime? day]) async =>
       _list(await _request(
               'GET', '/profissional/fila?day=${_day(day ?? DateTime.now())}'))

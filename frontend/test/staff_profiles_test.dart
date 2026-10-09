@@ -53,11 +53,11 @@ class FakeStaffApi extends ApiService {
 
   @override
   Future<List<AdminAppointment>> receptionAppointments(
-          {DateTime? day,
-          String? specialty,
-          int? professionalId,
-          String? status,
-          String? patient}) async {
+      {DateTime? day,
+      String? specialty,
+      int? professionalId,
+      String? status,
+      String? patient}) async {
     final pending = nextReceptionRequest;
     nextReceptionRequest = null;
     lastDay = day;
@@ -90,10 +90,7 @@ class FakeStaffApi extends ApiService {
 
   @override
   Future<List<AdminAppointment>> nursingQueue(
-          {DateTime? day,
-          String? specialty,
-          String? status,
-          String? risk}) async {
+      {DateTime? day, String? specialty, String? status, String? risk}) async {
     lastDay = day;
     lastSpecialty = specialty;
     lastStatus = status;
@@ -187,7 +184,7 @@ void main() {
 
   testWidgets('reception_compact_collapses_filters_without_hiding_checkin',
       (tester) async {
-    await tester.binding.setSurfaceSize(const Size(360, 780));
+    await tester.binding.setSurfaceSize(const Size(390, 780));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     ApiService.session =
         const Session('token', 'Recepção Fictícia', 'recepcao', []);
@@ -197,6 +194,44 @@ void main() {
     expect(find.byKey(const Key('staff-compact-filters')), findsOneWidget);
     expect(find.text('Check-in'), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'detalhes fica à direita e dados essenciais são legíveis em 390 768 1280',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    ApiService.session =
+        const Session('token', 'Recepção Fictícia', 'recepcao', []);
+    for (final width in [390.0, 768.0, 1280.0]) {
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      await tester
+          .pumpWidget(UbsApp(home: StaffDashboard(api: FakeStaffApi(false))));
+      await tester.pumpAndSettle();
+
+      final card = find.byKey(const Key('staff-appointment-card-22'));
+      final details = find.byKey(const Key('staff-details-button-22'));
+      final cardRect = tester.getRect(card);
+      final detailsRect = tester.getRect(details);
+      final patient = tester.widget<Text>(find.text('Paciente Fictício'));
+      final schedule = tester.widget<Text>(find.textContaining('Horário:'));
+
+      expect(detailsRect.center.dx, greaterThan(cardRect.center.dx),
+          reason: 'largura $width');
+      expect(detailsRect.right, lessThanOrEqualTo(cardRect.right),
+          reason: 'largura $width');
+      expect(cardRect.right - detailsRect.right, lessThanOrEqualTo(20),
+          reason: 'o botão deve ficar no extremo direito em $width');
+      expect(detailsRect.height, greaterThanOrEqualTo(48),
+          reason: 'largura $width');
+      expect(patient.style?.fontSize, greaterThanOrEqualTo(20),
+          reason: 'largura $width');
+      expect(schedule.style?.fontSize, greaterThanOrEqualTo(18),
+          reason: 'largura $width');
+      expect(find.text('Especialidade: Clínica Geral'), findsOneWidget);
+      expect(find.text('Profissional: Profissional Fictício'), findsOneWidget);
+      expect(find.text('Prioridade: Sem prioridade legal'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'largura $width');
+    }
   });
 
   testWidgets('empty_reception_can_clear_filters_without_changing_day',

@@ -1,11 +1,10 @@
 """API da UBS Rápida: autenticação, RBAC e agendamentos."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
+import logging
 import os
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.orm import Session
 from app.core.database import Base, SessionLocal, engine, get_db
@@ -16,8 +15,6 @@ from app.schemas import (
     AvailableSlot,
     CalendarSlot,
     LoginRequest,
-    PasswordRecoveryVerify,
-    PasswordReset,
     PatientRegistration,
     RescheduleRequest,
     TokenResponse,
@@ -26,7 +23,8 @@ from app.schemas import (
     PatientSummary,
 )
 
-from app.core.config import ORIGINS
+from app.core.config import check_config, ORIGINS
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="UBS Rápida API", version="2.0.0")
 app.add_middleware(
@@ -46,9 +44,7 @@ from app.core.security import (
     canonical_role,
     permissions_for,
 )
-from app.core.config import check_config, ORIGINS
 from app.models import Guardian, PatientGuardian, Specialty
-from fastapi import Request
 from sqlalchemy.exc import IntegrityError
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -86,7 +82,6 @@ async def integrity_error(request, exc):
 
 PRIORITIES, STAFF = {"geral", "idoso_60+", "pcd", "gestante", "lactante"}, {
     "recepcao",
-    "profissional",
     "enfermagem",
     "medico",
     "admin",
@@ -191,15 +186,23 @@ def migrate_database() -> None:
         "outro_parentesco_responsavel": "VARCHAR(80)",
         "telefone_responsavel": "VARCHAR(11)",
         "email_responsavel": "VARCHAR(120)",
+        "email_verificado": "BOOLEAN DEFAULT 0",
         "criado_por": "INTEGER",
         "ultima_alteracao_por": "INTEGER",
     }
+    email_verification_added = False
     with engine.begin() as connection:
         for name, definition in fields.items():
             if name not in existing:
                 connection.execute(
                     text(f"ALTER TABLE usuarios ADD COLUMN {name} {definition}")
                 )
+                if name == "email_verificado":
+                    email_verification_added = True
+        if email_verification_added:
+            # Toda conta anterior à funcionalidade é tratada como conta de
+            # demonstração/legada e continua acessível após a migração.
+            connection.execute(text("UPDATE usuarios SET email_verificado = 1"))
     with engine.begin() as connection:
         for table, columns in {
             "consultas": {
@@ -212,6 +215,8 @@ def migrate_database() -> None:
                 "chamado_em": "DATETIME",
                 "iniciado_em": "DATETIME",
                 "concluido_em": "DATETIME",
+                "atendimento_medico_id": "INTEGER",
+                "resumo_atendimento": "TEXT",
             },
             "agendas_profissionais": {
                 "especialidade": "VARCHAR(80) DEFAULT 'Clínica geral'"
@@ -232,6 +237,20 @@ def migrate_database() -> None:
         specialty_columns = {c["name"] for c in inspect(engine).get_columns("especialidades")}
         if "ativo" not in specialty_columns:
             connection.execute(text("ALTER TABLE especialidades ADD COLUMN ativo BOOLEAN DEFAULT 1"))
+        risk_columns = {
+            c["name"] for c in inspect(engine).get_columns("classificacoes_risco")
+        }
+        for name, definition in {
+            "queixa_principal": "VARCHAR(500)",
+            "sinais_vitais": "VARCHAR(500)",
+        }.items():
+            if name not in risk_columns:
+                connection.execute(
+                    text(
+                        f"ALTER TABLE classificacoes_risco "
+                        f"ADD COLUMN {name} {definition}"
+                    )
+                )
         # A única vaga ativa por profissional/horário também fica protegida no SQLite.
         connection.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_consulta_vaga_ativa "
@@ -241,11 +260,23 @@ def migrate_database() -> None:
             "CREATE INDEX IF NOT EXISTS ix_consulta_paciente_status_data "
             "ON consultas(paciente_id, status, data_horario)"
         ))
+        duplicate_active_care = connection.execute(text(
+            "SELECT paciente_id FROM consultas WHERE status = 'em_atendimento' "
+            "GROUP BY paciente_id HAVING COUNT(*) > 1 LIMIT 1"
+        )).first()
+        if not duplicate_active_care:
+            connection.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_paciente_em_atendimento "
+                "ON consultas(paciente_id) WHERE status = 'em_atendimento'"
+            ))
         connection.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_agenda_especialidade_data "
             "ON agendas_profissionais(especialidade, data_horario)"
         ))
     with SessionLocal() as db:
+        db.execute(
+            update(User).where(User.perfil == "profissional").values(perfil="medico")
+        )
         db.execute(
             update(User)
             .where(User.criado_em.is_(None))
@@ -290,6 +321,7 @@ def seed(db: Session) -> None:
         email="admin@ubs.local",
         senha_hash=pwd.hash("Admin@123"),
         perfil="admin",
+        email_verificado=True,
     )
     patient = User(
         nome="Paciente Demonstração",
@@ -298,6 +330,7 @@ def seed(db: Session) -> None:
         email="paciente@ubs.local",
         senha_hash=pwd.hash("Paciente@123"),
         perfil="paciente",
+        email_verificado=True,
         e_prioridade="idoso_60+",
     )
     receptionist = User(
@@ -306,6 +339,7 @@ def seed(db: Session) -> None:
         email="recepcao@ubs.local",
         senha_hash=pwd.hash("Recepcao@123"),
         perfil="recepcao",
+        email_verificado=True,
     )
     ana = User(
         nome="Dra. Ana Paula",
@@ -313,13 +347,15 @@ def seed(db: Session) -> None:
         email="ana@ubs.local",
         senha_hash=pwd.hash("Medico@123"),
         perfil="medico",
+        email_verificado=True,
     )
     bruno = User(
-        nome="Dr. Bruno Lima",
+        nome="Dr. Victor Almeida",
         cpf="39053344705",
-        email="bruno@ubs.local",
+        email="victor.medico@ubs-rapida.local",
         senha_hash=pwd.hash("Medico@123"),
         perfil="medico",
+        email_verificado=True,
     )
     db.add_all([admin, patient, receptionist, ana, bruno])
     db.flush()
@@ -495,8 +531,11 @@ def register(
         validate_guardian(payload)
     if db.scalar(select(User).where(User.cpf == cpf)):
         raise HTTPException(409, {"field": "cpf", "message": "CPF já cadastrado"})
-    if db.scalar(select(User).where(User.email == str(payload.email).lower())):
-        raise HTTPException(409, {"field": "email", "message": "E-mail já cadastrado"})
+    normalized_email = str(payload.email).lower()
+    if db.scalar(select(User).where(func.lower(User.email) == normalized_email)):
+        raise HTTPException(
+            409, "CPF ou e-mail já cadastrado. Entre com sua conta ou use outros dados."
+        )
     priority = (
         "idoso_60+"
         if date.today().year
@@ -512,10 +551,13 @@ def register(
         nome=payload.name.strip(),
         cpf=cpf,
         data_nascimento=payload.birth_date,
-        email=str(payload.email).lower(),
+        email=normalized_email,
         telefone=phone,
         senha_hash=pwd.hash(payload.password),
         perfil="paciente",
+        # O cadastro não depende de confirmação por e-mail. O e-mail continua
+        # obrigatório para identificação e para o fluxo "Esqueci minha senha".
+        email_verificado=True,
         e_prioridade=priority,
         e_menor_idade=minor,
         nome_responsavel=(
@@ -567,7 +609,9 @@ def register(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(409, "CPF ou e-mail já cadastrado")
+        raise HTTPException(
+            409, "CPF ou e-mail já cadastrado. Entre com sua conta ou use outros dados."
+        )
     db.refresh(user)
     return as_user(user)
 
@@ -610,8 +654,13 @@ def appointments(user: User = Depends(current_user), db: Session = Depends(get_d
     )
     if user.perfil == "paciente":
         query = query.where(Appointment.paciente_id == user.id)
-    elif canonical_role(user.perfil) == "profissional":
-        query = query.where(Appointment.medico_id == user.id)
+    elif canonical_role(user.perfil) == "medico":
+        query = query.where(
+            Appointment.medico_id == user.id,
+            Appointment.chegada_em.is_not(None),
+            Appointment.triagem_em.is_not(None),
+            Appointment.status.in_(["em_triagem", "em_atendimento"]),
+        )
     elif user.perfil == "enfermagem":
         query = query.where(Appointment.chegada_em.is_not(None))
     return [as_appointment(item, user.perfil != "paciente") for item in db.scalars(query).unique()]
@@ -634,12 +683,19 @@ def patient_appointments(
 @app.get("/queue")
 def queue(user: User = Depends(require_roles(*STAFF)), db: Session = Depends(get_db)):
     from app.services.appointments import mark_overdue_absences, queue_sort_key
-    mark_overdue_absences(db, user)
+    if canonical_role(user.perfil) != "medico":
+        mark_overdue_absences(db, user)
     query = (
         select(Appointment)
         .where(Appointment.status.in_(["em_espera", "em_triagem", "em_atendimento"]))
         .order_by(Appointment.data_horario)
     )
+    if canonical_role(user.perfil) == "medico":
+        query = query.where(
+            Appointment.medico_id == user.id,
+            Appointment.triagem_em.is_not(None),
+            Appointment.status.in_(["em_triagem", "em_atendimento"]),
+        )
     ordered = sorted(db.scalars(query).unique(), key=queue_sort_key)
     return [
         {
@@ -988,6 +1044,9 @@ def block(
 from app.routes.recovery import router as recovery_router
 
 app.include_router(recovery_router)
+from app.routes.email_verification import router as email_verification_router
+
+app.include_router(email_verification_router)
 from app.routes.operations import router as operations_router
 
 app.include_router(operations_router)
@@ -997,3 +1056,6 @@ app.include_router(admin_router)
 from app.routes.staff import router as staff_router
 
 app.include_router(staff_router)
+from app.routes.medical import router as medical_router
+
+app.include_router(medical_router)
